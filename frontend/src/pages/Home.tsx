@@ -2,6 +2,7 @@ import Dialer from "../components/Dialer";
 import CallStatus from "../components/CallStatus";
 import CallList from "../components/CallList";
 import { useCallSocket } from "../hooks/useCallSocket";
+import { useWebRtcMedia } from "../hooks/useWebRtcMedia";
 import { useCallStore } from "../store/callStore";
 import { useMemo } from "react";
 
@@ -19,6 +20,8 @@ export default function Home() {
     calls.find((c) => c.status !== "ended" && c.status !== "failed") ||
     null;
 
+  const { webrtcStatus, webrtcError } = useWebRtcMedia(activeCall);
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
       <header>
@@ -27,7 +30,12 @@ export default function Home() {
       </header>
 
       <Dialer />
-      <CallStatus call={activeCall} ariConnected={ariConnected} />
+      <CallStatus
+        call={activeCall}
+        ariConnected={ariConnected}
+        webrtcStatus={webrtcStatus}
+        webrtcError={webrtcError}
+      />
       <CallList
         calls={calls}
         activeCallId={activeCall?.call_id ?? null}

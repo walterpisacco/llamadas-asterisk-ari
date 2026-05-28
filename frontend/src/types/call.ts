@@ -11,6 +11,8 @@ export interface CallState {
   call_id: string;
   channel_ids: string[];
   bridge_id?: string | null;
+  external_media_attached?: boolean;
+  webrtc_connected?: boolean;
   direction: CallDirection;
   status: CallStatus;
   number?: string | null;

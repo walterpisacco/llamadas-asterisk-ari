@@ -16,27 +16,62 @@ const STATUS_COLORS: Record<Status, string> = {
   failed: "text-red-400",
 };
 
+type WebRtcStatus = "idle" | "connecting" | "connected" | "error";
+
 interface Props {
   call: CallState | null;
   ariConnected: boolean | null;
+  webrtcStatus?: WebRtcStatus;
+  webrtcError?: string | null;
 }
 
-export default function CallStatus({ call, ariConnected }: Props) {
+const WEBRTC_LABELS: Record<WebRtcStatus, string> = {
+  idle: "Inactivo",
+  connecting: "Conectando micrófono…",
+  connected: "Audio en navegador",
+  error: "Error WebRTC",
+};
+
+export default function CallStatus({
+  call,
+  ariConnected,
+  webrtcStatus = "idle",
+  webrtcError,
+}: Props) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
       <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-500">
         Estado
       </h2>
 
-      <div className="mb-4 flex items-center gap-2 text-sm">
-        <span
-          className={`h-2 w-2 rounded-full ${
-            ariConnected ? "bg-emerald-500" : "bg-red-500"
-          }`}
-        />
-        <span className="text-slate-400">
-          ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
-        </span>
+      <div className="mb-4 space-y-2 text-sm">
+        <div className="flex items-center gap-2">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              ariConnected ? "bg-emerald-500" : "bg-red-500"
+            }`}
+          />
+          <span className="text-slate-400">
+            ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
+          </span>
+        </div>
+        {call && (
+          <div className="flex items-center gap-2">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                webrtcStatus === "connected"
+                  ? "bg-emerald-500"
+                  : webrtcStatus === "error"
+                    ? "bg-red-500"
+                    : "bg-amber-500"
+              }`}
+            />
+            <span className="text-slate-400">{WEBRTC_LABELS[webrtcStatus]}</span>
+          </div>
+        )}
+        {webrtcError && (
+          <p className="text-xs text-red-400">{webrtcError}</p>
+        )}
       </div>
 
       {call ? (

@@ -2,11 +2,13 @@ import logging
 from typing import Any, Callable, Awaitable
 
 from ari.client import AriClient
+from ari.debug_log import log_ari_event
 from ari.events import AriEventsListener
 from calls.models import CallState
 from calls.registry import CallRegistry
 from calls.state_machine import CallStateMachine, PROCESSED_CHANNELS
 from config import Settings, get_settings
+from media.manager import MediaManager
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,13 @@ class CallService:
         self.settings = settings or get_settings()
         self.ari = AriClient(self.settings)
         self.registry = CallRegistry()
-        self.state_machine = CallStateMachine(self.ari, self.registry)
+        self.media_manager = MediaManager(self.settings)
+        self.state_machine = CallStateMachine(
+            self.ari,
+            self.registry,
+            self.settings,
+            media_manager=self.media_manager,
+        )
         self._broadcast = broadcast
         self.ari_listener = AriEventsListener(self._handle_ari_event, self.settings)
         self._pending_outbound: dict[str, str] = {}
@@ -43,6 +51,13 @@ class CallService:
         await self.ari.close()
 
     async def _handle_ari_event(self, event: dict[str, Any]) -> None:
+        '''
+        if self.settings.ari_debug:
+            log_ari_event(
+                event,
+                full=self.settings.ari_debug_full_events,
+            )
+        '''
         call = await self.state_machine.handle_event(event)
         if call:
             await self._notify(call)
@@ -72,12 +87,18 @@ class CallService:
         )
         self.registry.add(call)
 
+        if self.settings.webrtc_enabled:
+            try:
+                await self.media_manager.prepare_session(call.call_id)
+            except Exception as exc:
+                logger.error("No se pudo preparar WebRTC: %s", exc)
+
         try:
             channel = await self.ari.originate_channel(
                 endpoint,
                 caller_id=self.settings.outbound_caller_id,
                 use_stasis=True,
-                app_args=[call.call_id, "outbound"],
+                app_args=[call.call_id, "customer"],
             )
             channel_id = channel["id"]
             self.registry.link_channel(call, channel_id)
@@ -107,6 +128,7 @@ class CallService:
             except Exception as exc:
                 logger.warning("Delete bridge failed: %s", exc)
 
+        await self.media_manager.close_session(call_id)
         call.finalize("ended")
         self._pending_outbound.pop(call_id, None)
         await self._notify(call)
@@ -117,6 +139,28 @@ class CallService:
 
     def get_call(self, call_id: str) -> CallState | None:
         return self.registry.get(call_id)
+
+    async def ensure_webrtc_ready(self, call_id: str) -> CallState:
+        """Sesión WebRTC lista y reintento de externalMedia si hace falta."""
+        call = self.registry.get(call_id)
+        if not call:
+            raise KeyError(call_id)
+        if not self.settings.webrtc_enabled:
+            return call
+
+        await self.media_manager.prepare_session(call_id)
+        if not call.external_media_attached:
+            try:
+                await self.media_manager.attach_external_media(
+                    call, self.ari, self.registry
+                )
+            except Exception as exc:
+                logger.warning(
+                    "externalMedia pendiente para %s: %s",
+                    call_id,
+                    exc,
+                )
+        return call
 
     @property
     def ari_connected(self) -> bool:

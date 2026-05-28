@@ -9,7 +9,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `HTTP ${response.status}`);
+    let detail = text;
+    try {
+      const json = JSON.parse(text) as { detail?: string };
+      if (json.detail) detail = json.detail;
+    } catch {
+      /* respuesta no JSON */
+    }
+    throw new Error(`${response.status}: ${detail}`);
   }
   return response.json() as Promise<T>;
 }
@@ -36,6 +43,44 @@ export async function getHealth(): Promise<{
   status: string;
   ari_connected: boolean;
   ari_reachable: boolean;
+  webrtc_enabled?: boolean;
 }> {
   return request("/health");
+}
+
+export interface WebRtcConfig {
+  enabled: boolean;
+  ice_servers: RTCIceServer[];
+}
+
+export async function getWebRtcConfig(): Promise<WebRtcConfig> {
+  return request("/webrtc/config");
+}
+
+export async function postWebRtcOffer(
+  callId: string,
+  body: { sdp: string; type: RTCSdpType },
+): Promise<{ sdp: string; type: RTCSdpType }> {
+  return request(`/calls/${callId}/webrtc/offer`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function postWebRtcIce(
+  callId: string,
+  body: {
+    candidate: string;
+    sdp_mid: string | null;
+    sdp_mline_index: number | null;
+  },
+): Promise<{ ok: boolean }> {
+  return request(`/calls/${callId}/webrtc/ice`, {
+    method: "POST",
+    body: JSON.stringify({
+      candidate: body.candidate,
+      sdp_mid: body.sdp_mid,
+      sdp_mline_index: body.sdp_mline_index,
+    }),
+  });
 }
