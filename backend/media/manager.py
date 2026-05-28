@@ -87,7 +87,7 @@ class MediaManager:
             channel = await ari.create_external_media(
                 external_host=external_host,
                 app_args=[call.call_id, "media"],
-                format=self.settings.external_media_format,
+                fmt=self.settings.external_media_format,
             )
             channel_id = channel["id"]
             registry.link_channel(call, channel_id)
