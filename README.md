@@ -60,6 +60,10 @@ El backend origina con `app=StasisApp` y `appArgs` para identificar la llamada. 
 
 ## Arranque
 
+```bash
+cp .env.example .env
+```
+
 ### Backend
 
 ```bash
@@ -141,14 +145,16 @@ llamadas/
 - React Native reutilizando los mismos endpoints
 
 ##  Cómo arrancar
-# 1. Configurar Asterisk
-cp /var/www/html/llamadas/.env.example /var/www/html/llamadas/.env
-# Editar ARI_BASE_URL, credenciales, etc.
-# 2. Backend
-cd /var/www/html/llamadas/backend
+
+```bash
+cd llamadas/
+cp .env.example .env
+
+cd llamadas/backend
 source .venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
-# 3. Frontend
-cd /var/www/html/llamadas/frontend
+
+cd llamadas/frontend/
 cp .env.example .env
 npm run dev
+```
