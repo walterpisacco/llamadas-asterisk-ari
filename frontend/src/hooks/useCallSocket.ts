@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { CallWebSocket } from "../services/ws";
 import { useCallStore } from "../store/callStore";
-import { getHealth } from "../services/api";
+import { getCall, getHealth } from "../services/api";
 
 export function useCallSocket() {
   const upsertCall = useCallStore((s) => s.upsertCall);
@@ -26,8 +26,19 @@ export function useCallSocket() {
       getHealth().then(applyHealth).catch(() => setAriHealth(false, false, "offline"));
     }, 5000);
 
+    const callPollInterval = setInterval(() => {
+      const activeId = useCallStore.getState().activeCallId;
+      if (!activeId) return;
+      const local = useCallStore.getState().calls[activeId];
+      if (local?.status === "ended" || local?.status === "failed") return;
+      void getCall(activeId)
+        .then((call) => upsertCall(call))
+        .catch(() => undefined);
+    }, 2000);
+
     return () => {
       clearInterval(healthInterval);
+      clearInterval(callPollInterval);
       socket.disconnect();
     };
   }, [upsertCall, fetchCalls, setAriHealth]);

@@ -38,6 +38,7 @@ class CallService:
         self.ari_listener = AriEventsListener(self._handle_ari_event, self.settings)
         self._pending_outbound: dict[str, str] = {}
         self._outbound_calls: dict[str, CallState] = {}
+        self._cleaned_calls: set[str] = set()
 
     def resolve_call_for_event(
         self, channel_id: str | None, event: dict[str, Any]
@@ -107,6 +108,8 @@ class CallService:
             )
         '''
         call = await self.state_machine.handle_event(event)
+        if call and call.status in ("ended", "failed"):
+            await self._cleanup_after_remote_end(call)
         if call:
             await self._notify(call)
 
@@ -122,6 +125,32 @@ class CallService:
                 {"type": "call_update", "call": call.to_public()}
             )
 
+    async def _cleanup_after_remote_end(self, call: CallState) -> None:
+        """Cierra media y pending cuando Asterisk cuelga (canales ya caídos)."""
+        call_id = call.call_id
+        if call_id in self._cleaned_calls:
+            return
+        self._cleaned_calls.add(call_id)
+
+        await self.media_manager.close_session(call_id)
+        self._pending_outbound.pop(call_id, None)
+        self._outbound_calls.pop(call_id, None)
+
+        if call.bridge_id:
+            try:
+                await self.ari.delete_bridge(call.bridge_id)
+            except Exception as exc:
+                logger.debug("Bridge %s ya eliminado: %s", call.bridge_id, exc)
+            call.bridge_id = None
+
+    async def _remote_hangup_detected(self, call: CallState, reason: str) -> None:
+        if call.status in ("ended", "failed"):
+            return
+        call.finalize("ended")
+        logger.info("Colgado remoto call_id=%s (%s)", call.call_id, reason)
+        await self._cleanup_after_remote_end(call)
+        await self._notify(call)
+
     async def start_outbound(self, number: str) -> CallState:
         endpoint = self.settings.format_endpoint(number)
         call = CallState(
@@ -131,6 +160,7 @@ class CallService:
         )
         self.registry.add(call)
         self._outbound_calls[call.call_id] = call
+        self._cleaned_calls.discard(call.call_id)
         logger.info(
             "Llamada saliente registrada call_id=%s (registry=%d)",
             call.call_id,
@@ -179,16 +209,8 @@ class CallService:
                     exc,
                 )
 
-        if call.bridge_id:
-            try:
-                await self.ari.delete_bridge(call.bridge_id)
-            except Exception as exc:
-                logger.warning("Delete bridge failed: %s", exc)
-
-        await self.media_manager.close_session(call_id)
         call.finalize("ended")
-        self._pending_outbound.pop(call_id, None)
-        self._outbound_calls.pop(call_id, None)
+        await self._cleanup_after_remote_end(call)
         await self._notify(call)
         return True
 
@@ -215,6 +237,8 @@ class CallService:
             ch = await self.ari.get_channel(channel_id)
         except Exception as exc:
             logger.debug("sync_outbound_media %s: %s", call_id, exc)
+            if call.outbound_stasis_setup or call.status in ("answered", "talking"):
+                await self._remote_hangup_detected(call, "canal no existe en ARI")
             return call
         if ch.get("state") != "Up":
             return call
@@ -230,33 +254,41 @@ class CallService:
         return call
 
     async def _watch_outbound_channel(self, call_id: str, channel_id: str) -> None:
-        """Respaldo: detecta contestado por polling ARI (sin WebSocket)."""
-        for attempt in range(120):
+        """Polling ARI: setup al contestar y detectar colgado remoto sin WebSocket."""
+        setup_done = False
+        for _ in range(600):
             await asyncio.sleep(0.5)
             call = self.get_call(call_id)
             if not call or call.status in ("ended", "failed"):
                 return
-            if call.external_media_attached and call.bridge_id:
-                return
+
             try:
                 ch = await self.ari.get_channel(channel_id)
             except Exception:
-                continue
-            if ch.get("state") == "Up":
-                if not call.outbound_stasis_setup:
+                if setup_done or call.outbound_stasis_setup:
+                    await self._remote_hangup_detected(
+                        call, f"canal {channel_id} cerrado en Asterisk"
+                    )
+                return
+
+            state = ch.get("state")
+            if state == "Up":
+                if not setup_done:
                     logger.info(
-                        "Canal %s Up — setup por polling (call_id=%s, ws=%s)",
+                        "Canal %s Up — setup por polling (call_id=%s)",
                         channel_id,
                         call_id,
-                        self.ari_ws_healthy,
                     )
-                await self.sync_outbound_media(call_id)
+                    await self.sync_outbound_media(call_id)
+                    setup_done = True
+                call = self.get_call(call_id)
+                if call and call.external_media_attached and call.bridge_id:
+                    setup_done = True
+            elif setup_done and state in ("Down", "Ringing"):
+                await self._remote_hangup_detected(
+                    call, f"canal cliente pasó a {state}"
+                )
                 return
-        logger.warning(
-            "Timeout: canal %s no llegó a Up (call_id=%s)",
-            channel_id,
-            call_id,
-        )
 
     async def ensure_webrtc_ready(self, call_id: str) -> CallState:
         """Sesión WebRTC lista y reintento de externalMedia si hace falta."""

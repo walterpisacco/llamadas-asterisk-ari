@@ -342,12 +342,44 @@ class CallStateMachine:
             except Exception as exc:
                 logger.error("No se pudo reproducir sonido de prueba: %s", exc)
 
+    def _find_call_for_channel(self, channel_id: str | None, event: dict[str, Any]) -> CallState | None:
+        if not channel_id:
+            return None
+        call = self._resolve_existing_call(channel_id, event)
+        if call:
+            return call
+        for candidate in self.registry.list_all():
+            if channel_id in candidate.channel_ids:
+                return candidate
+            if channel_id == candidate.external_media_channel_id:
+                return candidate
+        return None
+
+    def _is_customer_channel(self, channel: dict[str, Any], call: CallState) -> bool:
+        name = channel.get("name") or ""
+        if name.startswith("PJSIP/"):
+            return True
+        channel_id = channel.get("id")
+        if not channel_id:
+            return False
+        if channel_id == call.external_media_channel_id:
+            return False
+        if name.startswith("UnicastRTP/"):
+            return False
+        return channel_id in call.channel_ids
+
+    def _end_call(self, call: CallState, reason: str) -> None:
+        if call.status in ("ended", "failed"):
+            return
+        call.finalize("ended")
+        logger.info("Llamada %s finalizada (%s)", call.call_id, reason)
+
     async def _on_stasis_end(self, event: dict[str, Any]) -> CallState | None:
         channel = event.get("channel", {})
         channel_id = channel.get("id")
-        call = self.registry.get_by_channel(channel_id) if channel_id else None
-        if call and call.status not in ("ended", "failed"):
-            call.finalize("ended")
+        call = self._find_call_for_channel(channel_id, event)
+        if call and self._is_customer_channel(channel, call):
+            self._end_call(call, "StasisEnd cliente")
         return call
 
     async def _on_channel_state_change(self, event: dict[str, Any]) -> CallState | None:
@@ -374,9 +406,17 @@ class CallStateMachine:
         if channel_id:
             PROCESSED_CHANNELS.discard(channel_id)
 
-        call = self.registry.get_by_channel(channel_id) if channel_id else None
-        if call and call.status not in ("ended", "failed"):
-            remaining = [c for c in call.channel_ids if c != channel_id]
-            if not remaining or len(call.channel_ids) <= 1:
-                call.finalize("ended")
+        call = self._find_call_for_channel(channel_id, event)
+        if not call:
+            return None
+
+        if channel_id in call.channel_ids:
+            call.channel_ids = [c for c in call.channel_ids if c != channel_id]
+        if call.external_media_channel_id == channel_id:
+            call.external_media_channel_id = None
+            call.external_media_attached = False
+
+        if self._is_customer_channel(channel, call):
+            self._end_call(call, f"canal destruido {channel.get('name')}")
+
         return call
