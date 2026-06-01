@@ -16,17 +16,20 @@ const STATUS_COLORS: Record<Status, string> = {
   failed: "text-red-400",
 };
 
-type WebRtcStatus = "idle" | "connecting" | "connected" | "error";
+type WebRtcStatus = "idle" | "waiting_media" | "connecting" | "connected" | "error";
 
 interface Props {
   call: CallState | null;
-  ariConnected: boolean | null;
+  ariOperational: boolean | null;
+  ariWsConnected?: boolean | null;
+  ariMode?: "websocket" | "http" | "offline" | null;
   webrtcStatus?: WebRtcStatus;
   webrtcError?: string | null;
 }
 
 const WEBRTC_LABELS: Record<WebRtcStatus, string> = {
   idle: "Inactivo",
+  waiting_media: "Esperando enlace Asterisk…",
   connecting: "Conectando micrófono…",
   connected: "Audio en navegador",
   error: "Error WebRTC",
@@ -34,10 +37,21 @@ const WEBRTC_LABELS: Record<WebRtcStatus, string> = {
 
 export default function CallStatus({
   call,
-  ariConnected,
+  ariOperational,
+  ariWsConnected = null,
+  ariMode = null,
   webrtcStatus = "idle",
   webrtcError,
 }: Props) {
+  const ariLabel =
+    ariOperational === null
+      ? "…"
+      : !ariOperational
+        ? "ARI desconectado"
+        : ariMode === "websocket" || ariWsConnected
+          ? "ARI conectado"
+          : "ARI operativo (HTTP)";
+  const ariDotOk = Boolean(ariOperational);
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
       <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-500">
@@ -48,12 +62,10 @@ export default function CallStatus({
         <div className="flex items-center gap-2">
           <span
             className={`h-2 w-2 rounded-full ${
-              ariConnected ? "bg-emerald-500" : "bg-red-500"
+              ariDotOk ? "bg-emerald-500" : "bg-red-500"
             }`}
           />
-          <span className="text-slate-400">
-            ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
-          </span>
+          <span className="text-slate-400">ARI {ariLabel}</span>
         </div>
         {call && (
           <div className="flex items-center gap-2">
@@ -63,7 +75,9 @@ export default function CallStatus({
                   ? "bg-emerald-500"
                   : webrtcStatus === "error"
                     ? "bg-red-500"
-                    : "bg-amber-500"
+                    : webrtcStatus === "waiting_media"
+                      ? "bg-amber-400"
+                      : "bg-amber-500"
               }`}
             />
             <span className="text-slate-400">{WEBRTC_LABELS[webrtcStatus]}</span>

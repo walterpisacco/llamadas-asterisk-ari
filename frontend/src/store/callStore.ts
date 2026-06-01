@@ -7,8 +7,14 @@ interface CallStore {
   activeCallId: string | null;
   loading: boolean;
   error: string | null;
-  ariConnected: boolean | null;
-  setAriConnected: (v: boolean) => void;
+  ariOperational: boolean | null;
+  ariWsConnected: boolean | null;
+  ariMode: "websocket" | "http" | "offline" | null;
+  setAriHealth: (
+    operational: boolean,
+    wsConnected: boolean,
+    mode: "websocket" | "http" | "offline",
+  ) => void;
   upsertCall: (call: CallState) => void;
   setActiveCall: (callId: string | null) => void;
   fetchCalls: () => Promise<void>;
@@ -21,9 +27,16 @@ export const useCallStore = create<CallStore>((set, get) => ({
   activeCallId: null,
   loading: false,
   error: null,
-  ariConnected: null,
+  ariOperational: null,
+  ariWsConnected: null,
+  ariMode: null,
 
-  setAriConnected: (v) => set({ ariConnected: v }),
+  setAriHealth: (operational, wsConnected, mode) =>
+    set({
+      ariOperational: operational,
+      ariWsConnected: wsConnected,
+      ariMode: mode,
+    }),
 
   upsertCall: (call) =>
     set((state) => ({

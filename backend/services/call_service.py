@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 from typing import Any, Callable, Awaitable
 
 from ari.client import AriClient
@@ -30,10 +32,49 @@ class CallService:
             self.registry,
             self.settings,
             media_manager=self.media_manager,
+            call_resolver=self.resolve_call_for_event,
         )
         self._broadcast = broadcast
         self.ari_listener = AriEventsListener(self._handle_ari_event, self.settings)
         self._pending_outbound: dict[str, str] = {}
+        self._outbound_calls: dict[str, CallState] = {}
+
+    def resolve_call_for_event(
+        self, channel_id: str | None, event: dict[str, Any]
+    ) -> CallState | None:
+        """Busca la llamada por canal, call_id en args o caché de salientes."""
+        args = event.get("args") or []
+        call_id = str(args[0]).strip() if args and args[0] else None
+
+        if channel_id:
+            by_ch = self.registry.get_by_channel(channel_id)
+            if by_ch:
+                return by_ch
+
+        if call_id:
+            found = self.registry.get(call_id)
+            if found:
+                return found
+            cached = self._outbound_calls.get(call_id)
+            if cached:
+                self.registry.add(cached)
+                if channel_id:
+                    self.registry.link_channel(cached, channel_id)
+                logger.info(
+                    "Llamada %s re-sincronizada al registry (Stasis)",
+                    call_id,
+                )
+                return cached
+
+        if channel_id:
+            for cid, ch in self._pending_outbound.items():
+                if ch == channel_id:
+                    cached = self._outbound_calls.get(cid)
+                    if cached:
+                        self.registry.add(cached)
+                        self.registry.link_channel(cached, channel_id)
+                        return cached
+        return None
 
     def set_broadcast(self, fn: BroadcastFn) -> None:
         self._broadcast = fn
@@ -45,6 +86,13 @@ class CallService:
             logger.warning("ARI cleanup on startup failed: %s", exc)
         PROCESSED_CHANNELS.clear()
         self.ari_listener.start()
+        if not self.ari_listener.task_alive:
+            logger.error("No se pudo iniciar la tarea del WebSocket ARI")
+        elif not self.ari_listener.connected:
+            logger.info(
+                "WebSocket ARI conectando… (HTTP ARI alcanzable=%s)",
+                await self.ari_healthy(),
+            )
 
     async def shutdown(self) -> None:
         await self.ari_listener.stop()
@@ -63,14 +111,10 @@ class CallService:
             await self._notify(call)
 
         if event.get("type") == "StasisStart":
-            channel = event.get("channel", {})
-            channel_id = channel.get("id")
-            for call_id, ch_id in list(self._pending_outbound.items()):
-                if ch_id == channel_id:
-                    call = self.registry.get(call_id)
-                    if call:
-                        await self._notify(call)
-                    break
+            channel_id = (event.get("channel") or {}).get("id")
+            call = self.resolve_call_for_event(channel_id, event)
+            if call:
+                await self._notify(call)
 
     async def _notify(self, call: CallState) -> None:
         if self._broadcast:
@@ -86,12 +130,12 @@ class CallService:
             number=number,
         )
         self.registry.add(call)
-
-        if self.settings.webrtc_enabled:
-            try:
-                await self.media_manager.prepare_session(call.call_id)
-            except Exception as exc:
-                logger.error("No se pudo preparar WebRTC: %s", exc)
+        self._outbound_calls[call.call_id] = call
+        logger.info(
+            "Llamada saliente registrada call_id=%s (registry=%d)",
+            call.call_id,
+            len(self.registry.list_all()),
+        )
 
         try:
             channel = await self.ari.originate_channel(
@@ -103,6 +147,10 @@ class CallService:
             channel_id = channel["id"]
             self.registry.link_channel(call, channel_id)
             self._pending_outbound[call.call_id] = channel_id
+            asyncio.create_task(
+                self._watch_outbound_channel(call.call_id, channel_id),
+                name=f"watch-outbound-{call.call_id[:8]}",
+            )
         except Exception as exc:
             logger.error("Originate failed: %s", exc)
             call.status = "failed"
@@ -121,6 +169,15 @@ class CallService:
                 await self.ari.hangup(channel_id)
             except Exception as exc:
                 logger.warning("Hangup channel %s failed: %s", channel_id, exc)
+        if call.external_media_channel_id and call.external_media_channel_id not in call.channel_ids:
+            try:
+                await self.ari.hangup(call.external_media_channel_id)
+            except Exception as exc:
+                logger.warning(
+                    "Hangup externalMedia %s failed: %s",
+                    call.external_media_channel_id,
+                    exc,
+                )
 
         if call.bridge_id:
             try:
@@ -131,6 +188,7 @@ class CallService:
         await self.media_manager.close_session(call_id)
         call.finalize("ended")
         self._pending_outbound.pop(call_id, None)
+        self._outbound_calls.pop(call_id, None)
         await self._notify(call)
         return True
 
@@ -138,13 +196,75 @@ class CallService:
         return self.registry.list_all()
 
     def get_call(self, call_id: str) -> CallState | None:
-        return self.registry.get(call_id)
+        return self.registry.get(call_id) or self._outbound_calls.get(call_id)
+
+    async def sync_outbound_media(self, call_id: str) -> CallState | None:
+        """Si el WS ARI falla, configura puente/media vía HTTP cuando el canal está Up."""
+        call = self.get_call(call_id)
+        if not call or call.direction != "outbound":
+            return call
+        if call.external_media_attached and call.bridge_id:
+            return call
+        channel_id = (
+            self._pending_outbound.get(call_id)
+            or (call.channel_ids[0] if call.channel_ids else None)
+        )
+        if not channel_id:
+            return call
+        try:
+            ch = await self.ari.get_channel(channel_id)
+        except Exception as exc:
+            logger.debug("sync_outbound_media %s: %s", call_id, exc)
+            return call
+        if ch.get("state") != "Up":
+            return call
+        event = {
+            "type": "StasisStart",
+            "args": [call_id, "customer"],
+            "channel": ch,
+        }
+        updated = await self.state_machine.handle_event(event)
+        if updated:
+            await self._notify(updated)
+            return updated
+        return call
+
+    async def _watch_outbound_channel(self, call_id: str, channel_id: str) -> None:
+        """Respaldo: detecta contestado por polling ARI (sin WebSocket)."""
+        for attempt in range(120):
+            await asyncio.sleep(0.5)
+            call = self.get_call(call_id)
+            if not call or call.status in ("ended", "failed"):
+                return
+            if call.external_media_attached and call.bridge_id:
+                return
+            try:
+                ch = await self.ari.get_channel(channel_id)
+            except Exception:
+                continue
+            if ch.get("state") == "Up":
+                if not call.outbound_stasis_setup:
+                    logger.info(
+                        "Canal %s Up — setup por polling (call_id=%s, ws=%s)",
+                        channel_id,
+                        call_id,
+                        self.ari_ws_healthy,
+                    )
+                await self.sync_outbound_media(call_id)
+                return
+        logger.warning(
+            "Timeout: canal %s no llegó a Up (call_id=%s)",
+            channel_id,
+            call_id,
+        )
 
     async def ensure_webrtc_ready(self, call_id: str) -> CallState:
         """Sesión WebRTC lista y reintento de externalMedia si hace falta."""
-        call = self.registry.get(call_id)
+        call = self.registry.get(call_id) or self._outbound_calls.get(call_id)
         if not call:
             raise KeyError(call_id)
+        if not self.registry.get(call_id):
+            self.registry.add(call)
         if not self.settings.webrtc_enabled:
             return call
 
@@ -165,6 +285,15 @@ class CallService:
     @property
     def ari_connected(self) -> bool:
         return self.ari_listener.connected
+
+    @property
+    def ari_events_recent(self) -> bool:
+        last = self.ari_listener.last_event_at
+        return last is not None and (time.monotonic() - last) < 45.0
+
+    @property
+    def ari_ws_healthy(self) -> bool:
+        return self.ari_listener.connected or self.ari_events_recent
 
     async def ari_healthy(self) -> bool:
         return await self.ari.health_check()

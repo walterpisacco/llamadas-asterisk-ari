@@ -39,9 +39,17 @@ export async function getCalls(): Promise<{ calls: CallState[] }> {
   return request("/calls");
 }
 
+export async function getCall(callId: string): Promise<CallState> {
+  return request(`/calls/${callId}`);
+}
+
 export async function getHealth(): Promise<{
   status: string;
   ari_connected: boolean;
+  ari_operational?: boolean;
+  ari_mode?: "websocket" | "http" | "offline";
+  ari_ws_connected?: boolean;
+  ari_events_recent?: boolean;
   ari_reachable: boolean;
   webrtc_enabled?: boolean;
 }> {

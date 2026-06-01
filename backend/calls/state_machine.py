@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from ari.client import AriClient
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 PROCESSED_CHANNELS: set[str] = set()
 
+CallResolver = Callable[[str | None, dict[str, Any]], CallState | None]
+
 
 class CallStateMachine:
     def __init__(
@@ -20,11 +23,13 @@ class CallStateMachine:
         registry: CallRegistry,
         settings: Settings | None = None,
         media_manager: MediaManager | None = None,
+        call_resolver: CallResolver | None = None,
     ) -> None:
         self.ari = ari
         self.registry = registry
         self.settings = settings or get_settings()
         self.media_manager = media_manager
+        self._call_resolver = call_resolver
 
     async def handle_event(self, event: dict[str, Any]) -> CallState | None:
         event_type = event.get("type")
@@ -46,15 +51,34 @@ class CallStateMachine:
         if not channel_id:
             return None
 
+        args = event.get("args") or []
+        call_id_arg = str(args[0]).strip() if args and args[0] else None
+        role = self._stasis_role(event)
+
         if channel_id in PROCESSED_CHANNELS:
-            logger.debug("Ignoring already processed channel: %s", channel_id)
-            return None
+            existing = self._resolve_existing_call(channel_id, event)
+            if existing and role == "customer" and not existing.external_media_attached:
+                logger.info(
+                    "Reintento setup media call=%s channel=%s",
+                    existing.call_id,
+                    channel_id,
+                )
+                await self._setup_call_media(existing, channel_id, event)
+                return existing
+            if existing and role == "media" and not existing.external_media_attached:
+                await self._setup_call_media(existing, channel_id, event)
+                return existing
+            logger.debug("Canal ya procesado: %s", channel_id)
+            return existing
+
         PROCESSED_CHANNELS.add(channel_id)
 
         existing = self._resolve_existing_call(channel_id, event)
+        if not existing and call_id_arg:
+            existing = self._recover_call(call_id_arg, channel_id, event)
+
         if existing:
             self.registry.link_channel(existing, channel_id)
-            role = self._stasis_role(event)
             if existing.direction == "outbound" or role in ("customer", "agent", "media"):
                 logger.info(
                     "Setup media call=%s channel=%s role=%s",
@@ -65,15 +89,19 @@ class CallStateMachine:
                 await self._setup_call_media(existing, channel_id, event)
             return existing
 
-        args = event.get("args") or []
+        logger.warning(
+            "StasisStart sin llamada en registry (channel=%s args=%s)",
+            channel_id,
+            args,
+        )
         direction: CallDirection = (
             "outbound" if ("outbound" in args or "customer" in args) else "inbound"
         )
-
         caller = channel.get("caller", {})
         number = caller.get("number") or channel.get("dialplan", {}).get("exten")
 
         call = CallState(
+            call_id=call_id_arg or None,
             channel_ids=[channel_id],
             direction=direction,
             status="ringing",
@@ -91,13 +119,44 @@ class CallStateMachine:
             except Exception as exc:
                 logger.error("Failed inbound setup for %s: %s", channel_id, exc)
                 call.status = "failed"
+        elif direction == "outbound" or role == "customer":
+            await self._setup_call_media(call, channel_id, event)
 
+        return call
+
+    def _recover_call(
+        self, call_id: str, channel_id: str, event: dict[str, Any]
+    ) -> CallState:
+        """Re-vincula Stasis con la llamada originada (p. ej. tras reload del proceso)."""
+        args = event.get("args") or []
+        direction: CallDirection = (
+            "outbound" if ("outbound" in args or "customer" in args) else "inbound"
+        )
+        channel = event.get("channel", {})
+        caller = channel.get("caller", {})
+        number = caller.get("number") or channel.get("dialplan", {}).get("exten")
+        call = CallState(
+            call_id=call_id,
+            channel_ids=[channel_id],
+            direction=direction,
+            status="ringing",
+            number=number,
+        )
+        self.registry.add(call)
+        logger.warning(
+            "Llamada %s recuperada desde StasisStart (no estaba en registry)",
+            call_id,
+        )
         return call
 
     def _resolve_existing_call(
         self, channel_id: str, event: dict[str, Any]
     ) -> CallState | None:
-        """Llamada ya registrada (p. ej. tras originate); args en Stasis suelen venir vacíos."""
+        if self._call_resolver:
+            found = self._call_resolver(channel_id, event)
+            if found:
+                return found
+
         by_channel = self.registry.get_by_channel(channel_id)
         if by_channel:
             return by_channel
@@ -198,6 +257,12 @@ class CallStateMachine:
         if role == "media":
             try:
                 await self._add_to_call_bridge(call, channel_id)
+                call.external_media_attached = True
+                logger.info(
+                    "externalMedia en puente %s — audio navegador↔PJSIP habilitado (llamada %s)",
+                    call.bridge_id,
+                    call.call_id,
+                )
             except Exception as exc:
                 logger.error(
                     "Fallo al añadir externalMedia al puente (llamada %s): %s",
@@ -219,7 +284,11 @@ class CallStateMachine:
                 call.status = "failed"
             return
 
-        if call.outbound_stasis_setup:
+        if (
+            call.outbound_stasis_setup
+            and call.bridge_id
+            and call.external_media_attached
+        ):
             return
         call.outbound_stasis_setup = True
 

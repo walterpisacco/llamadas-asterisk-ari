@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from calls.models import CallState
 from services.call_service import CallService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -49,15 +53,35 @@ def create_api_router(call_service: CallService) -> APIRouter:
         call = call_service.get_call(call_id)
         if not call:
             raise HTTPException(status_code=404, detail="Call not found")
+        if (
+            call.direction == "outbound"
+            and not call.external_media_attached
+            and call.status not in ("ended", "failed")
+        ):
+            synced = await call_service.sync_outbound_media(call_id)
+            if synced:
+                call = synced
         return call
 
     @router.get("/health")
     async def health() -> dict:
         ari_ok = await call_service.ari_healthy()
+        listener = call_service.ari_listener
+        if ari_ok and not listener.task_alive:
+            listener.start()
+        ws_ok = call_service.ari_ws_healthy
+        mode = "websocket" if ws_ok else ("http" if ari_ok else "offline")
         return {
             "status": "ok",
-            "ari_connected": call_service.ari_connected,
+            # Operativo para llamadas (HTTP ARI o WS con eventos)
+            "ari_operational": ari_ok,
+            "ari_connected": ari_ok,
+            "ari_mode": mode,
+            "ari_ws_connected": call_service.ari_connected,
+            "ari_ws_task_alive": listener.task_alive,
+            "ari_events_recent": call_service.ari_events_recent,
             "ari_reachable": ari_ok,
+            "ari_last_error": listener.last_error,
             "webrtc_enabled": call_service.settings.webrtc_enabled,
         }
 
@@ -87,6 +111,13 @@ def create_api_router(call_service: CallService) -> APIRouter:
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         call.webrtc_connected = True
+        port = call_service.media_manager.rtp_port(call_id)
+        logger.info(
+            "WebRTC offer OK call_id=%s (RTP puerto %s, bridge=%s)",
+            call_id,
+            port,
+            call.bridge_id,
+        )
         await call_service._notify(call)
         return answer
 

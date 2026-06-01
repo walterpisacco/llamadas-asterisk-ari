@@ -1,24 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  getCall,
   getWebRtcConfig,
   postWebRtcIce,
   postWebRtcOffer,
 } from "../services/api";
+import { useCallStore } from "../store/callStore";
 import type { CallState } from "../types/call";
 
-type WebRtcStatus = "idle" | "connecting" | "connected" | "error";
+type WebRtcStatus = "idle" | "waiting_media" | "connecting" | "connected" | "error";
 
 export function useWebRtcMedia(activeCall: CallState | null) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const negotiatingRef = useRef(false);
+  const negotiatedCallRef = useRef<string | null>(null);
   const [status, setStatus] = useState<WebRtcStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const disconnect = useCallback(() => {
+    negotiatingRef.current = false;
+    negotiatedCallRef.current = null;
     pcRef.current?.close();
     pcRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
     setStatus("idle");
   }, []);
 
@@ -34,9 +44,35 @@ export function useWebRtcMedia(activeCall: CallState | null) {
       return;
     }
 
+    if (
+      negotiatedCallRef.current === callId &&
+      pcRef.current?.connectionState === "connected"
+    ) {
+      setStatus("connected");
+      return;
+    }
+
+    if (!activeCall.external_media_attached) {
+      setStatus("waiting_media");
+      setError(null);
+      const upsertCall = useCallStore.getState().upsertCall;
+      const poll = window.setInterval(() => {
+        void getCall(callId)
+          .then((detail) => {
+            if (detail.external_media_attached) {
+              upsertCall(detail);
+            }
+          })
+          .catch(() => undefined);
+      }, 1000);
+      return () => window.clearInterval(poll);
+    }
+
     let cancelled = false;
 
     async function connect() {
+      if (negotiatingRef.current) return;
+      negotiatingRef.current = true;
       setStatus("connecting");
       setError(null);
 
@@ -66,6 +102,13 @@ export function useWebRtcMedia(activeCall: CallState | null) {
         pcRef.current = pc;
 
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        pc.ontrack = (ev) => {
+          const [remoteStream] = ev.streams;
+          if (!remoteStream || !remoteAudioRef.current) return;
+          remoteAudioRef.current.srcObject = remoteStream;
+          void remoteAudioRef.current.play().catch(() => undefined);
+        };
 
         pc.onicecandidate = (ev) => {
           if (!ev.candidate) return;
@@ -106,13 +149,17 @@ export function useWebRtcMedia(activeCall: CallState | null) {
         if (cancelled) return;
 
         await pc.setRemoteDescription(answer);
+        negotiatedCallRef.current = callId;
         setStatus("connected");
       } catch (e) {
         if (!cancelled) {
           setStatus("error");
           setError(e instanceof Error ? e.message : "Error WebRTC");
         }
+        negotiatedCallRef.current = null;
         disconnect();
+      } finally {
+        negotiatingRef.current = false;
       }
     }
 
@@ -123,7 +170,9 @@ export function useWebRtcMedia(activeCall: CallState | null) {
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      disconnect();
+      if (negotiatedCallRef.current !== callId) {
+        disconnect();
+      }
     };
   }, [
     activeCall?.call_id,
@@ -132,5 +181,5 @@ export function useWebRtcMedia(activeCall: CallState | null) {
     disconnect,
   ]);
 
-  return { webrtcStatus: status, webrtcError: error };
+  return { webrtcStatus: status, webrtcError: error, remoteAudioRef };
 }

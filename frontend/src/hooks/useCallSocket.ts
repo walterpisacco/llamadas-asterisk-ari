@@ -6,26 +6,29 @@ import { getHealth } from "../services/api";
 export function useCallSocket() {
   const upsertCall = useCallStore((s) => s.upsertCall);
   const fetchCalls = useCallStore((s) => s.fetchCalls);
-  const setAriConnected = useCallStore((s) => s.setAriConnected);
+  const setAriHealth = useCallStore((s) => s.setAriHealth);
 
   useEffect(() => {
     fetchCalls();
-    getHealth()
-      .then((h) => setAriConnected(h.ari_connected && h.ari_reachable))
-      .catch(() => setAriConnected(false));
+    const applyHealth = (h: Awaited<ReturnType<typeof getHealth>>) => {
+      const operational = Boolean(h.ari_operational ?? h.ari_reachable);
+      const ws = Boolean(h.ari_ws_connected);
+      const mode = h.ari_mode ?? (operational ? (ws ? "websocket" : "http") : "offline");
+      setAriHealth(operational, ws, mode);
+    };
+
+    getHealth().then(applyHealth).catch(() => setAriHealth(false, false, "offline"));
 
     const socket = new CallWebSocket();
     socket.connect((msg) => upsertCall(msg.call));
 
     const healthInterval = setInterval(() => {
-      getHealth()
-        .then((h) => setAriConnected(h.ari_connected && h.ari_reachable))
-        .catch(() => setAriConnected(false));
-    }, 15000);
+      getHealth().then(applyHealth).catch(() => setAriHealth(false, false, "offline"));
+    }, 5000);
 
     return () => {
       clearInterval(healthInterval);
       socket.disconnect();
     };
-  }, [upsertCall, fetchCalls, setAriConnected]);
+  }, [upsertCall, fetchCalls, setAriHealth]);
 }

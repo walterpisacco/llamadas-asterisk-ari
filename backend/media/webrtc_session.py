@@ -69,14 +69,27 @@ class WebRtcBridgeSession:
         self.asterisk_track = AsteriskAudioTrack(rtp)
         self._browser_task: asyncio.Task[None] | None = None
         self._closed = False
+        self._pending_ice: list[tuple[str | None, str | None, int | None]] = []
 
     async def apply_offer(self, sdp: str, offer_type: str) -> dict[str, str]:
         if self._closed:
             raise RuntimeError("Sesión WebRTC cerrada")
 
+        if self.pc and self.pc.localDescription:
+            state = self.pc.connectionState
+            if state in ("connected", "connecting", "new"):
+                local = self.pc.localDescription
+                logger.info(
+                    "Offer duplicado ignorado call_id=%s (estado=%s)",
+                    self.call_id,
+                    state,
+                )
+                return {"sdp": local.sdp, "type": local.type}
+
         if self.pc:
             await self.pc.close()
             self.pc = None
+            self._pending_ice.clear()
 
         self.pc = RTCPeerConnection(configuration=_rtc_configuration(self._ice_servers))
         self.pc.addTrack(self.asterisk_track)
@@ -100,6 +113,7 @@ class WebRtcBridgeSession:
 
         offer = RTCSessionDescription(sdp=sdp, type=offer_type)
         await self.pc.setRemoteDescription(offer)
+        await self._flush_pending_ice()
         answer = await self.pc.createAnswer()
         await self.pc.setLocalDescription(answer)
         await self._wait_ice_gathering()
@@ -110,13 +124,30 @@ class WebRtcBridgeSession:
         logger.info("WebRTC negociado para llamada %s", self.call_id)
         return {"sdp": local.sdp, "type": local.type}
 
+    async def _flush_pending_ice(self) -> None:
+        if not self.pc or not self._pending_ice:
+            return
+        from aiortc.sdp import candidate_from_sdp
+
+        for candidate, sdp_mid, sdp_mline_index in self._pending_ice:
+            if not candidate:
+                continue
+            ice = candidate_from_sdp(candidate)
+            ice.sdpMid = sdp_mid
+            ice.sdpMLineIndex = sdp_mline_index
+            await self.pc.addIceCandidate(ice)
+        self._pending_ice.clear()
+
     async def add_ice_candidate(
         self,
         candidate: str | None,
         sdp_mid: str | None,
         sdp_mline_index: int | None,
     ) -> None:
-        if not self.pc or not candidate:
+        if not candidate:
+            return
+        if not self.pc or not self.pc.remoteDescription:
+            self._pending_ice.append((candidate, sdp_mid, sdp_mline_index))
             return
         from aiortc.sdp import candidate_from_sdp
 

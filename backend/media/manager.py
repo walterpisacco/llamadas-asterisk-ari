@@ -34,9 +34,22 @@ class MediaManager:
         return servers
 
     async def prepare_session(self, call_id: str) -> None:
-        """Crea socket RTP + peer WebRTC antes de Stasis (evita 409 en /webrtc/offer)."""
-        if call_id in self._sessions:
+        """Un socket RTP + WebRTC por llamada (mismo puerto que externalMedia)."""
+        if call_id in self._sessions and call_id in self._rtp_sessions:
+            port = self._rtp_sessions[call_id].local_port
+            logger.info(
+                "Reutilizando sesión WebRTC call_id=%s (RTP puerto %s)",
+                call_id,
+                port,
+            )
             return
+
+        old = self._sessions.pop(call_id, None)
+        old_rtp = self._rtp_sessions.pop(call_id, None)
+        if old:
+            await old.close()  # type: ignore[union-attr]
+        if old_rtp:
+            old_rtp.close()
 
         rtp = RtpSession()
         port = await rtp.start(
@@ -65,13 +78,24 @@ class MediaManager:
             port,
         )
 
+    def rtp_port(self, call_id: str) -> int | None:
+        rtp = self._rtp_sessions.get(call_id)
+        return rtp.local_port if rtp else None
+
     async def attach_external_media(
         self,
         call: CallState,
         ari: AriClient,
         registry: CallRegistry,
     ) -> None:
-        if not self.enabled or call.external_media_attached:
+        if not self.enabled:
+            return
+        if call.external_media_channel_id:
+            logger.info(
+                "externalMedia ya existe para %s (%s)",
+                call.call_id,
+                call.external_media_channel_id,
+            )
             return
 
         await self.prepare_session(call.call_id)
@@ -92,13 +116,23 @@ class MediaManager:
             channel_id = channel["id"]
             registry.link_channel(call, channel_id)
             call.external_media_channel_id = channel_id
-            call.external_media_attached = True
-            logger.info(
-                "externalMedia %s → %s para llamada %s",
-                channel_id,
-                external_host,
-                call.call_id,
-            )
+            if call.bridge_id:
+                await ari.add_to_bridge(call.bridge_id, channel_id)
+                call.external_media_attached = True
+                logger.info(
+                    "externalMedia %s → %s en puente %s (llamada %s)",
+                    channel_id,
+                    external_host,
+                    call.bridge_id,
+                    call.call_id,
+                )
+            else:
+                logger.info(
+                    "externalMedia %s → %s para llamada %s (sin puente aún)",
+                    channel_id,
+                    external_host,
+                    call.call_id,
+                )
         except Exception as exc:
             logger.error(
                 "No se pudo crear externalMedia para %s: %s",

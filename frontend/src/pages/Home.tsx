@@ -11,7 +11,9 @@ export default function Home() {
 
   const callsMap = useCallStore((s) => s.calls);
   const activeCallId = useCallStore((s) => s.activeCallId);
-  const ariConnected = useCallStore((s) => s.ariConnected);
+  const ariOperational = useCallStore((s) => s.ariOperational);
+  const ariWsConnected = useCallStore((s) => s.ariWsConnected);
+  const ariMode = useCallStore((s) => s.ariMode);
   const setActiveCall = useCallStore((s) => s.setActiveCall);
   const calls = useMemo(() => Object.values(callsMap), [callsMap]);
 
@@ -20,10 +22,12 @@ export default function Home() {
     calls.find((c) => c.status !== "ended" && c.status !== "failed") ||
     null;
 
-  const { webrtcStatus, webrtcError } = useWebRtcMedia(activeCall);
+  const { webrtcStatus, webrtcError, remoteAudioRef } = useWebRtcMedia(activeCall);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
+      {/* Audio remoto (Asterisk → navegador); sin esto WebRTC "conecta" pero no se escucha nada */}
+      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Llamadas</h1>
         <p className="text-sm text-slate-500">Panel de control ARI</p>
@@ -32,7 +36,9 @@ export default function Home() {
       <Dialer />
       <CallStatus
         call={activeCall}
-        ariConnected={ariConnected}
+        ariOperational={ariOperational}
+        ariWsConnected={ariWsConnected}
+        ariMode={ariMode}
         webrtcStatus={webrtcStatus}
         webrtcError={webrtcError}
       />

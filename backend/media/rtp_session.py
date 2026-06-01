@@ -26,6 +26,7 @@ class RtpSession:
         self._ssrc = random.randint(0, 2**32 - 1)
         self._closed = False
         self._recv_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=64)
+        self._warned_no_remote = False
 
     @property
     def local_port(self) -> int | None:
@@ -78,7 +79,15 @@ class RtpSession:
             pass
 
     def send_ulaw(self, payload: bytes) -> None:
-        if self._closed or not self._transport or not self._remote:
+        if self._closed or not self._transport:
+            return
+        if not self._remote:
+            if not self._warned_no_remote:
+                self._warned_no_remote = True
+                logger.warning(
+                    "RTP: sin paquetes de Asterisk aún — no se envía audio al puente. "
+                    "Verificá EXTERNAL_MEDIA_ADVERTISE_HOST y firewall UDP hacia este servidor."
+                )
             return
         if len(payload) > SAMPLES_PER_PACKET:
             payload = payload[:SAMPLES_PER_PACKET]
