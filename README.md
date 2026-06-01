@@ -8,6 +8,8 @@ Aplicación de control de llamadas con Asterisk ARI. El frontend **nunca** se co
 React (Vite)  →  REST + WebSocket  →  FastAPI  →  ARI  →  Asterisk
 ```
 
+Diagramas detallados del flujo de una llamada (frontend, backend, ARI, WebSocket): [docs/FLUJO-LLAMADAS.md](docs/FLUJO-LLAMADAS.md).
+
 ## Requisitos
 
 - Python 3.11+
@@ -187,6 +189,8 @@ curl -X POST http://localhost:8000/api/hangup \
 
 ```
 llamadas/
+├── docs/
+│   └── FLUJO-LLAMADAS.md   # Roadmap llamada inicio → fin (Mermaid)
 ├── backend/
 │   ├── api/          # REST routes
 │   ├── ari/          # Cliente ARI + listener WebSocket
