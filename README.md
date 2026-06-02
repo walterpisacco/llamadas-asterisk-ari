@@ -243,9 +243,8 @@ npm run dev
 
 ## ❤️ Support the Project
 
-```bash
-If this project helps you, consider supporting its development.
-Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
-```
+- If this project helps you, consider supporting its development.
+- Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
+
 
 - PayPal: https://paypal.me/WPisacco
