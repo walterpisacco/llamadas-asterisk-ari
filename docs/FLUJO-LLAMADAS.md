@@ -26,7 +26,7 @@ flowchart TB
     subgraph AST["📞 Asterisk"]
         ST[StasisApp]
         BR[Puente mixing]
-        PJSIP[PJSIP destino ej. 12]
+        PJSIP[PJSIP destino ej. 1101]
         EXT[Canal externalMedia]
     end
 
@@ -93,8 +93,8 @@ sequenceDiagram
     participant AST as 📞 Asterisk
     participant WS as 📡 WS /ws
 
-    U->>FE: Clic "Llamar" (número 12)
-    FE->>API: POST /api/call {"number":"12"}
+    U->>FE: Clic "Llamar" (número 1101)
+    FE->>API: POST /api/call {"number":"1101"}
     API->>CS: start_outbound()
 
     Note over CS: Crea CallState (status=ringing)<br/>call_id UUID en memoria
@@ -103,9 +103,9 @@ sequenceDiagram
         CS->>CS: MediaManager.prepare_session()<br/>socket RTP + sesión aiortc
     end
 
-    CS->>ARI: POST /ari/channels (originate PJSIP/12)
+    CS->>ARI: POST /ari/channels (originate PJSIP/1101)
     ARI->>AST: Origina llamada → StasisApp
-    AST-->>AST: PJSIP/12 ringing…
+    AST-->>AST: PJSIP/1101 ringing…
 
     CS-->>API: call_id + status
     API-->>FE: { call_id, status }
@@ -117,7 +117,7 @@ sequenceDiagram
 
 1. Registra la llamada en `CallRegistry` (`ringing`).
 2. Si `WEBRTC_ENABLED=true`, prepara RTP/WebRTC **antes** de que conteste el destino.
-3. `originate_channel` → endpoint `PJSIP/12`, `app=StasisApp`, `appArgs=call_id,customer`.
+3. `originate_channel` → endpoint `PJSIP/1101`, `app=StasisApp`, `appArgs=call_id,customer`.
 4. Guarda el `channel_id` de Asterisk y notifica al frontend.
 
 ---
@@ -137,7 +137,7 @@ sequenceDiagram
     participant WS as 📡 WS /ws
     participant FE as 🖥️ Frontend
 
-    AST->>ARIw: StasisStart (PJSIP/12, role=customer)
+    AST->>ARIw: StasisStart (PJSIP/1101, role=customer)
     ARIw->>SM: handle_event()
     SM->>SM: Resuelve llamada por channel_id / call_id
     SM->>ARI: create_bridge (mixing)
@@ -203,7 +203,7 @@ sequenceDiagram
         API->>MM: add_ice_candidate
     end
 
-    Note over FE,AST: Audio: mic ↔ aiortc ↔ RTP ↔ externalMedia ↔ puente ↔ PJSIP/12
+    Note over FE,AST: Audio: mic ↔ aiortc ↔ RTP ↔ externalMedia ↔ puente ↔ PJSIP/1101
 ```
 
 El frontend **no** usa WebSocket para el audio; solo REST para SDP/ICE. El WebSocket del frontend es solo para **estado** de la llamada.
