@@ -4,7 +4,7 @@ export const DUMMY_CONTACTS: Contact[] = [
   {
     id: "1",
     name: "María González",
-    number: "12",
+    number: "1165305623",
     avatarUrl: "https://i.pravatar.cc/150?u=maria-gonzalez",
     lastContactAt: "10:32",
   },
