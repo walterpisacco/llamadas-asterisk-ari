@@ -1,14 +1,17 @@
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { alpha, useTheme } from "@mui/material/styles";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Dialer from "../components/Dialer";
 import CallStatus from "../components/CallStatus";
 import CallList from "../components/CallList";
 import ContactsPanel from "../components/ContactsPanel";
+import { DUMMY_CONTACTS } from "../data/dummyContacts";
 import { useCallSocket } from "../hooks/useCallSocket";
 import { useCallStore } from "../store/callStore";
 import type { Contact } from "../types/contact";
@@ -21,9 +24,11 @@ interface HomeProps {
 export default function Home({ mode, onToggleMode }: HomeProps) {
   useCallSocket();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [mobileShowCallPanel, setMobileShowCallPanel] = useState(false);
 
   const callsMap = useCallStore((s) => s.calls);
   const activeCallId = useCallStore((s) => s.activeCallId);
@@ -36,10 +41,25 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
     calls.find((c) => c.status !== "ended" && c.status !== "failed") ||
     null;
 
+  const selectedContact = useMemo(
+    () => DUMMY_CONTACTS.find((c) => c.id === selectedContactId) ?? null,
+    [selectedContactId]
+  );
+
+  useEffect(() => {
+    if (!isMobile) setMobileShowCallPanel(false);
+  }, [isMobile]);
+
   const handleSelectContact = (contact: Contact) => {
     setSelectedContactId(contact.id);
     setPhoneNumber(contact.number);
+    if (isMobile) setMobileShowCallPanel(true);
   };
+
+  const handleBackToContacts = () => setMobileShowCallPanel(false);
+
+  const showContactsPanel = !isMobile || !mobileShowCallPanel;
+  const showCallPanel = !isMobile || mobileShowCallPanel;
 
   return (
     <Box
@@ -66,25 +86,52 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
         }}
       >
         <Box>
-          <Typography variant="h5" fontWeight={700} letterSpacing="-0.02em">
+          <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
             Llamadas
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Panel de control ARI
           </Typography>
         </Box>
-        <IconButton
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box
+            sx={{
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              bgcolor: ariConnected ? "success.main" : "error.main",
+            }}
+          />
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: { xs: "none", sm: "block" } }}
+          >
+            ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
+          </Typography>
+          <IconButton
           onClick={onToggleMode}
           aria-label={mode === "dark" ? "Modo claro" : "Modo oscuro"}
           color="inherit"
           size="small"
         >
-          {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
-        </IconButton>
+            {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
+          </IconButton>
+        </Box>
       </Box>
 
-      <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <Box sx={{ width: "30%", minWidth: 260, maxWidth: 420, flexShrink: 0 }}>
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0, position: "relative" }}>
+        <Box
+          sx={{
+            width: { xs: "100%", md: "30%" },
+            minWidth: { md: 260 },
+            maxWidth: { md: 420 },
+            flexShrink: 0,
+            display: showContactsPanel ? "flex" : "none",
+            flexDirection: "column",
+            minHeight: 0,
+          }}
+        >
           <ContactsPanel
             selectedContactId={selectedContactId}
             onSelectContact={handleSelectContact}
@@ -94,12 +141,39 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
         <Box
           sx={{
             flex: 1,
+            minWidth: 0,
+            minHeight: 0,
             overflowY: "auto",
-            display: "flex",
+            display: showCallPanel ? "flex" : "none",
             flexDirection: "column",
-            py: 2,
+            py: { xs: 1, md: 2 },
           }}
         >
+          {isMobile && mobileShowCallPanel && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                px: 1,
+                pb: 1,
+                flexShrink: 0,
+                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+              }}
+            >
+              <IconButton
+                onClick={handleBackToContacts}
+                aria-label="Volver a contactos"
+                color="inherit"
+                edge="start"
+              >
+                <ArrowBackIcon />
+              </IconButton>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+                {selectedContact?.name ?? "Llamada"}
+              </Typography>
+            </Box>
+          )}
           <Dialer number={phoneNumber} onNumberChange={setPhoneNumber} />
           <CallStatus call={activeCall} ariConnected={ariConnected} />
           <CallList

@@ -17,25 +17,44 @@ export default function Dialer({ number, onNumberChange }: DialerProps) {
   const hasActive = Boolean(activeCallId);
 
   return (
-    <AppCard>
-      <Stack spacing={2} component="form" className="mt-4">
-        <AppTextField
-          id="number"
-          label="Número"
-          type="tel"
-          value={number}
-          onChange={(e) => onNumberChange(e.target.value)}
-          placeholder="Ej: 9111565309188"
-          disabled={hasActive || loading}
-          slotProps={{ input: { sx: { fontSize: "1.125rem"}} }}
-          className="w-full"
-        />
-        <Box sx={{ display: "flex", gap: 1.5 }}>
+    <AppCard sx={{ overflow: "visible" }}>
+      <Stack
+        spacing={2}
+        component="form"
+        sx={{ mt: 2, mb: 4, minHeight: 168 }}
+      >
+        <Box sx={{ flexShrink: 0, pt: 3.5 }}>
+          <AppTextField
+            id="number"
+            label="Número"
+            type="tel"
+            value={number}
+            onChange={(e) => onNumberChange(e.target.value)}
+            placeholder="Ej: 9111565309188"
+            disabled={hasActive || loading}
+            slotProps={{ input: { sx: { fontSize: "1.125rem" } } }}
+            className="w-full"
+          />
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 1.5,
+            flexShrink: 0,
+            minHeight: 50,
+          }}
+        >
           <AppButton
             type="button"
             onClick={() => startCall(number)}
             disabled={!number.trim() || hasActive || loading}
-            sx={{ flex: 1, width: "auto", minWidth: 0 }}
+            sx={{
+              flex: "1 1 50%",
+              width: "auto",
+              minWidth: 120,
+              flexShrink: 0,
+              "&.Mui-disabled": { opacity: 0.55 },
+            }}
           >
             Llamar
           </AppButton>
@@ -43,16 +62,24 @@ export default function Dialer({ number, onNumberChange }: DialerProps) {
             type="button"
             onClick={() => hangup()}
             disabled={!hasActive || loading}
-            sx={{ flex: 1, width: "auto", minWidth: 0 }}
+            sx={{
+              flex: "1 1 50%",
+              width: "auto",
+              minWidth: 120,
+              flexShrink: 0,
+              "&.Mui-disabled": { opacity: 0.55 },
+            }}
           >
             Cortar
           </AppButton>
         </Box>
-        {error && (
-          <Typography variant="body2" color="error">
-            {error}
-          </Typography>
-        )}
+        <Box sx={{ minHeight: 24, flexShrink: 0 }}>
+          {error ? (
+            <Typography variant="body2" color="error">
+              {error}
+            </Typography>
+          ) : null}
+        </Box>
       </Stack>
     </AppCard>
   );

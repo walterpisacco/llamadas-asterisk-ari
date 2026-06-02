@@ -1,6 +1,5 @@
 import Box from "@mui/material/Box";
 import InputAdornment from "@mui/material/InputAdornment";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import SearchIcon from "@mui/icons-material/Search";
 import { alpha, useTheme } from "@mui/material/styles";
@@ -8,6 +7,7 @@ import { useMemo, useState } from "react";
 import { DUMMY_CONTACTS } from "../data/dummyContacts";
 import type { Contact } from "../types/contact";
 import ContactItem from "./ContactItem";
+import AppTextField from "./ui/TextField";
 
 interface ContactsPanelProps {
   selectedContactId: string | null;
@@ -46,7 +46,7 @@ export default function ContactsPanel({
         <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
           Contactos
         </Typography>
-        <TextField
+        <AppTextField
           fullWidth
           size="small"
           placeholder="Buscar contactos"

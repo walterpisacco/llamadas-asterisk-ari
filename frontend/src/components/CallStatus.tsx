@@ -41,21 +41,6 @@ export default function CallStatus({ call, ariConnected }: Props) {
       >
         Estado
       </Typography>
-
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            bgcolor: ariConnected ? "success.main" : "error.main",
-          }}
-        />
-        <Typography variant="body2" color="text.secondary">
-          ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
-        </Typography>
-      </Box>
-
       {call ? (
         <Box component="dl" sx={{ m: 0, "& > div + div": { mt: 1.5 } }}>
           <Box>

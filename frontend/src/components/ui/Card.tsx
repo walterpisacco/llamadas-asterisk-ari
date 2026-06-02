@@ -1,7 +1,14 @@
-import { Card, CardContent } from '@mui/material';
+import { Card, CardContent, type SxProps, type Theme } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import type { ReactNode } from 'react';
 
-export default function AppCard({ children }: any) {
+export default function AppCard({
+  children,
+  sx,
+}: {
+  children: ReactNode;
+  sx?: SxProps<Theme>;
+}) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
@@ -22,6 +29,7 @@ export default function AppCard({ children }: any) {
           : `0 14px 55px ${theme.palette.common.black}`,
         padding: '16px',
         margin: '16px',
+        ...sx,
         '&::before': {
           content: '""',
           position: 'absolute',
