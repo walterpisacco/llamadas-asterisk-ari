@@ -4,7 +4,6 @@ Aplicación de control de llamadas con Asterisk ARI. El frontend **nunca** se co
 
 ## ❤️ Support the Project
 
-If this project helps you, consider supporting its development.
 Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
 
 - PayPal: https://paypal.me/WPisacco
@@ -243,8 +242,7 @@ npm run dev
 
 ## ❤️ Support the Project
 
-- If this project helps you, consider supporting its development.
-- Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
+Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
 
 
 - PayPal: https://paypal.me/WPisacco
