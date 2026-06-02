@@ -34,11 +34,18 @@ class CallState(BaseModel):
         if channel_id not in self.channel_ids:
             self.channel_ids.append(channel_id)
 
+    def elapsed_seconds(self) -> int:
+        end = self.ended_at or utc_now()
+        if self.started_at:
+            return max(0, int((end - self.started_at).total_seconds()))
+        return self.duration
+
     def finalize(self, status: CallStatus = "ended") -> None:
         self.status = status
         self.ended_at = utc_now()
-        if self.ended_at and self.started_at:
-            self.duration = int((self.ended_at - self.started_at).total_seconds())
+        self.duration = self.elapsed_seconds()
 
     def to_public(self) -> dict:
-        return self.model_dump(mode="json")
+        data = self.model_dump(mode="json")
+        data["duration"] = self.elapsed_seconds()
+        return data

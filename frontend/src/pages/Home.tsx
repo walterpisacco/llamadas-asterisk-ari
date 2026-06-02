@@ -1,6 +1,7 @@
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
+import type { SxProps, Theme } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
@@ -20,6 +21,65 @@ import type { Contact } from "../types/contact";
 interface HomeProps {
   mode: "light" | "dark";
   onToggleMode: () => void;
+}
+
+interface HeaderActionsProps {
+  mode: "light" | "dark";
+  onToggleMode: () => void;
+  ariOperational: boolean | null;
+  ariLabel: string;
+  sx?: SxProps<Theme>;
+}
+
+function HeaderActions({
+  mode,
+  onToggleMode,
+  ariOperational,
+  ariLabel,
+  sx,
+}: HeaderActionsProps) {
+  return (
+    <Box
+      sx={[
+        {
+          display: "flex",
+          alignItems: "center",
+          gap: { xs: 0.75, sm: 1.5 },
+          flexShrink: 0,
+        },
+        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
+      ]}
+    >
+      <Box
+        component="span"
+        title={`ARI ${ariLabel}`}
+        sx={{
+          width: { xs: 14, sm: 18 },
+          height: { xs: 14, sm: 18 },
+          borderRadius: "50%",
+          flexShrink: 0,
+          bgcolor: ariOperational ? "success.main" : "error.main",
+        }}
+      />
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        noWrap
+        sx={{ display: { xs: "none", sm: "block" }, maxWidth: { sm: 140, md: "none" } }}
+      >
+        ARI {ariLabel}
+      </Typography>
+      <IconButton
+        onClick={onToggleMode}
+        aria-label={mode === "dark" ? "Modo claro" : "Modo oscuro"}
+        color="inherit"
+        size="small"
+        sx={{ ml: { xs: -0.5, sm: 0 } }}
+      >
+        {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
+      </IconButton>
+    </Box>
+  );
 }
 
 export default function Home({ mode, onToggleMode }: HomeProps) {
@@ -90,54 +150,84 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
         component="header"
         sx={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          px: 2,
-          py: 1.5,
+          flexDirection: { xs: "column", md: "row" },
+          alignItems: { xs: "stretch", md: "center" },
+          justifyContent: { md: "space-between" },
+          gap: { xs: 1, md: 0 },
+          px: { xs: 1.5, sm: 2 },
+          py: { xs: 1, md: 1.5 },
           flexShrink: 0,
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
           bgcolor: alpha(theme.palette.background.paper, 0.5),
           backdropFilter: "blur(8px)",
         }}
       >
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
-            ARI Asterisk
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Llamadas atraves de WS
-          </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2,
+            minWidth: 0,
+            width: { xs: "100%", md: "auto" },
+            flexShrink: 0,
+          }}
+        >
+          <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
+            <Typography
+              variant="h6"
+              component="h1"
+              noWrap
+              sx={{
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+                fontSize: { md: "1.5rem" },
+              }}
+            >
+              ARI Asterisk
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: { xs: "none", sm: "block" } }}
+            >
+              Llamadas atraves de WS
+            </Typography>
+          </Box>
+          <HeaderActions
+            mode={mode}
+            onToggleMode={onToggleMode}
+            ariOperational={ariOperational}
+            ariLabel={ariLabel}
+            sx={{ display: { xs: "flex", md: "none" } }}
+          />
         </Box>
-        <CallStatus
+
+        <Box
+          sx={{
+            flex: { md: 1 },
+            minWidth: 0,
+            width: { xs: "100%", md: "auto" },
+            px: { md: 2 },
+            display: "flex",
+            justifyContent: { md: "center" },
+          }}
+        >
+          <CallStatus
             call={activeCall}
             webrtcStatus={webrtcStatus}
             webrtcError={webrtcError}
+            compact={isMobile}
           />
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Box
-            sx={{
-              width: 18,
-              height: 18,
-              borderRadius: "50%",
-              bgcolor: ariOperational ? "success.main" : "error.main",
-            }}
-          />
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: { xs: "none", sm: "block" } }}
-          >
-            ARI {ariLabel}
-          </Typography>
-          <IconButton
-            onClick={onToggleMode}
-            aria-label={mode === "dark" ? "Modo claro" : "Modo oscuro"}
-            color="inherit"
-            size="small"
-          >
-            {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
-          </IconButton>
         </Box>
+
+        <HeaderActions
+          mode={mode}
+          onToggleMode={onToggleMode}
+          ariOperational={ariOperational}
+          ariLabel={ariLabel}
+          sx={{ display: { xs: "none", md: "flex" }, flexShrink: 0 }}
+        />
       </Box>
 
       <Box sx={{ display: "flex", flex: 1, minHeight: 0, position: "relative" }}>
