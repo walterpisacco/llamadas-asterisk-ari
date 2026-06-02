@@ -1,0 +1,7 @@
+export interface Contact {
+  id: string;
+  name: string;
+  number: string;
+  avatarUrl: string;
+  lastContactAt: string;
+}

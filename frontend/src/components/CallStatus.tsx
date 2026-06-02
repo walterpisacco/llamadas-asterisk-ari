@@ -1,4 +1,9 @@
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import { useTheme, type Theme } from "@mui/material/styles";
 import type { CallState, CallStatus as Status } from "../types/call";
+import AppCard from "./ui/Card";
+
 
 const STATUS_LABELS: Record<Status, string> = {
   ringing: "Ringing",
@@ -8,69 +13,104 @@ const STATUS_LABELS: Record<Status, string> = {
   failed: "Failed",
 };
 
-const STATUS_COLORS: Record<Status, string> = {
-  ringing: "text-amber-400",
-  answered: "text-blue-400",
-  talking: "text-emerald-400",
-  ended: "text-slate-500",
-  failed: "text-red-400",
-};
-
 interface Props {
   call: CallState | null;
   ariConnected: boolean | null;
 }
 
-export default function CallStatus({ call, ariConnected }: Props) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-500">
-        Estado
-      </h2>
+function statusColor(status: Status, theme: Theme) {
+  const map: Record<Status, string> = {
+    ringing: theme.palette.warning.main,
+    answered: theme.palette.info.main,
+    talking: theme.palette.success.main,
+    ended: theme.palette.text.secondary,
+    failed: theme.palette.error.main,
+  };
+  return map[status];
+}
 
-      <div className="mb-4 flex items-center gap-2 text-sm">
-        <span
-          className={`h-2 w-2 rounded-full ${
-            ariConnected ? "bg-emerald-500" : "bg-red-500"
-          }`}
+export default function CallStatus({ call, ariConnected }: Props) {
+  const theme = useTheme();
+
+  return (
+    <AppCard>
+      <Typography
+        variant="overline"
+        color="text.secondary"
+        sx={{ display: "block", mb: 2, letterSpacing: "0.08em" }}
+      >
+        Estado
+      </Typography>
+
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            bgcolor: ariConnected ? "success.main" : "error.main",
+          }}
         />
-        <span className="text-slate-400">
+        <Typography variant="body2" color="text.secondary">
           ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
-        </span>
-      </div>
+        </Typography>
+      </Box>
 
       {call ? (
-        <dl className="space-y-3">
-          <div>
-            <dt className="text-xs text-slate-500">Estado</dt>
-            <dd className={`text-2xl font-bold ${STATUS_COLORS[call.status]}`}>
+        <Box component="dl" sx={{ m: 0, "& > div + div": { mt: 1.5 } }}>
+          <Box>
+            <Typography component="dt" variant="caption" color="text.secondary">
+              Estado
+            </Typography>
+            <Typography
+              component="dd"
+              variant="h5"
+              fontWeight={700}
+              sx={{ m: 0, color: statusColor(call.status, theme) }}
+            >
               {STATUS_LABELS[call.status]}
-            </dd>
-          </div>
+            </Typography>
+          </Box>
           {call.number && (
-            <div>
-              <dt className="text-xs text-slate-500">Número</dt>
-              <dd className="text-lg">{call.number}</dd>
-            </div>
+            <Box>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                Número
+              </Typography>
+              <Typography component="dd" variant="h6" sx={{ m: 0 }}>
+                {call.number}
+              </Typography>
+            </Box>
           )}
-          <div>
-            <dt className="text-xs text-slate-500">Dirección</dt>
-            <dd className="capitalize">{call.direction}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Duración</dt>
-            <dd>{call.duration}s</dd>
-          </div>
+          <Box>
+            <Typography component="dt" variant="caption" color="text.secondary">
+              Dirección
+            </Typography>
+            <Typography component="dd" sx={{ m: 0, textTransform: "capitalize" }}>
+              {call.direction}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography component="dt" variant="caption" color="text.secondary">
+              Duración
+            </Typography>
+            <Typography component="dd" sx={{ m: 0 }}>
+              {call.duration}s
+            </Typography>
+          </Box>
           {call.agent_state && (
-            <div>
-              <dt className="text-xs text-slate-500">Agente</dt>
-              <dd>{call.agent_state}</dd>
-            </div>
+            <Box>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                Agente
+              </Typography>
+              <Typography component="dd" sx={{ m: 0 }}>
+                {call.agent_state}
+              </Typography>
+            </Box>
           )}
-        </dl>
+        </Box>
       ) : (
-        <p className="text-slate-500">Sin llamada activa</p>
+        <Typography color="text.secondary">Sin llamada activa</Typography>
       )}
-    </div>
+    </AppCard>
   );
 }
