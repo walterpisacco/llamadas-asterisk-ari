@@ -37,7 +37,7 @@ cp .env.example .env
 
 | Variable | Descripción |
 |----------|-------------|
-| `ARI_BASE_URL` | URL HTTP de ARI (ej. `http://172.16.22.81:8088`) |
+| `ARI_BASE_URL` | URL HTTP de ARI (ej. `http://127.0.0.1:8088`) |
 | `ARI_USER` / `ARI_PASSWORD` | Credenciales ARI |
 | `STASIS_APP` | Nombre de la app Stasis (default: `StasisApp`) |
 | `OUTBOUND_ENDPOINT_TEMPLATE` | Plantilla del endpoint (default: `PJSIP/{number}`) |
