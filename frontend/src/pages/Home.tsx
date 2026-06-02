@@ -102,12 +102,17 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
       >
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
-            Llamadas
+            ARI Asterisk
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Panel de control ARI
+            Llamadas atraves de WS
           </Typography>
         </Box>
+        <CallStatus
+            call={activeCall}
+            webrtcStatus={webrtcStatus}
+            webrtcError={webrtcError}
+          />
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Box
             sx={{
@@ -190,11 +195,7 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
             </Box>
           )}
           <Dialer number={phoneNumber} onNumberChange={setPhoneNumber} />
-          <CallStatus
-            call={activeCall}
-            webrtcStatus={webrtcStatus}
-            webrtcError={webrtcError}
-          />
+
           <CallList
             calls={calls}
             activeCallId={activeCall?.call_id ?? null}

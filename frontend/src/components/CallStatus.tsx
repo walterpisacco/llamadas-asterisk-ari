@@ -54,14 +54,7 @@ export default function CallStatus({
   const theme = useTheme();
 
   return (
-    <AppCard>
-      <Typography
-        variant="overline"
-        color="text.secondary"
-        sx={{ display: "block", mb: 2, letterSpacing: "0.08em" }}
-      >
-        Estado
-      </Typography>
+    <>
       {call && (
         <Box sx={{ mb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -87,57 +80,23 @@ export default function CallStatus({
       {call ? (
         <Box component="dl" sx={{ m: 0, "& > div + div": { mt: 1.5 } }}>
           <Box>
-            <Typography component="dt" variant="caption" color="text.secondary">
-              Estado
-            </Typography>
             <Typography
               component="dd"
               variant="h5"
               sx={{ m: 0, fontWeight: 700, color: statusColor(call.status, theme) }}
             >
-              {STATUS_LABELS[call.status]}
-            </Typography>
-          </Box>
-          {call.number && (
-            <Box>
-              <Typography component="dt" variant="caption" color="text.secondary">
-                Número
-              </Typography>
-              <Typography component="dd" variant="h6" sx={{ m: 0 }}>
-                {call.number}
-              </Typography>
-            </Box>
-          )}
-          <Box>
-            <Typography component="dt" variant="caption" color="text.secondary">
-              Dirección
-            </Typography>
-            <Typography component="dd" sx={{ m: 0, textTransform: "capitalize" }}>
-              {call.direction}
+              {STATUS_LABELS[call.status]} {call.number}
             </Typography>
           </Box>
           <Box>
-            <Typography component="dt" variant="caption" color="text.secondary">
-              Duración
-            </Typography>
             <Typography component="dd" sx={{ m: 0 }}>
               {call.duration}s
             </Typography>
           </Box>
-          {call.agent_state && (
-            <Box>
-              <Typography component="dt" variant="caption" color="text.secondary">
-                Agente
-              </Typography>
-              <Typography component="dd" sx={{ m: 0 }}>
-                {call.agent_state}
-              </Typography>
-            </Box>
-          )}
         </Box>
       ) : (
         <Typography color="text.secondary">Sin llamada activa</Typography>
       )}
-    </AppCard>
+    </>
   );
 }
