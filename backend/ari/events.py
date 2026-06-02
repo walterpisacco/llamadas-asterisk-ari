@@ -2,6 +2,8 @@ import asyncio
 import base64
 import json
 import logging
+import ssl
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote
@@ -27,6 +29,9 @@ class AriEventsListener:
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         self.connected = False
+        self.last_event_at: float | None = None
+        self.last_connected_at: float | None = None
+        self.last_error: str | None = None
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -61,7 +66,12 @@ class AriEventsListener:
                 raise
             except Exception as exc:
                 self.connected = False
-                logger.warning("ARI WebSocket error: %s. Reconnecting in %.1fs", exc, backoff)
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                logger.warning(
+                    "ARI WebSocket error: %s. Reconnecting in %.1fs",
+                    self.last_error,
+                    backoff,
+                )
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=backoff)
                     break
@@ -76,26 +86,47 @@ class AriEventsListener:
         ).decode()
         logger.info("Connecting to ARI WebSocket: %s", url)
 
-        async with websockets.connect(
-            url,
-            subprotocols=["ari"],
-            ping_interval=20,
-            ping_timeout=20,
-            additional_headers={"Authorization": f"Basic {credentials}"},
-        ) as ws:
+        ssl_ctx = ssl.create_default_context() if url.startswith("wss://") else None
+        connect_kw: dict = {
+            "subprotocols": ["ari"],
+            "ping_interval": 30,
+            "ping_timeout": 60,
+            "close_timeout": 10,
+            "open_timeout": 15,
+            "additional_headers": {"Authorization": f"Basic {credentials}"},
+        }
+        if ssl_ctx is not None:
+            connect_kw["ssl"] = ssl_ctx
+
+        async with websockets.connect(url, **connect_kw) as ws:
             self.connected = True
+            self.last_connected_at = time.monotonic()
+            self.last_error = None
             logger.info("ARI WebSocket connected (app=%s)", self.settings.stasis_app)
             async for message in ws:
                 if self._stop.is_set():
                     break
                 try:
                     event = json.loads(message)
-                    await self._on_event(event)
+                    self.last_event_at = time.monotonic()
+                    # No bloquear el WS mientras se hacen varias peticiones HTTP a ARI
+                    asyncio.create_task(
+                        self._dispatch_event(event),
+                        name=f"ari-event-{event.get('type', 'unknown')}",
+                    )
                 except json.JSONDecodeError as exc:
                     logger.error("Invalid ARI event JSON: %s", exc)
-                except Exception as exc:
-                    logger.exception("Error handling ARI event: %s", exc)
 
         self.connected = False
         if not self._stop.is_set():
             raise ConnectionClosed(None, None)
+
+    async def _dispatch_event(self, event: dict[str, Any]) -> None:
+        try:
+            await self._on_event(event)
+        except Exception as exc:
+            logger.exception("Error handling ARI event %s: %s", event.get("type"), exc)
+
+    @property
+    def task_alive(self) -> bool:
+        return self._task is not None and not self._task.done()

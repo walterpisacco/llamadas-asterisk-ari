@@ -13,6 +13,7 @@ import CallList from "../components/CallList";
 import ContactsPanel from "../components/ContactsPanel";
 import { DUMMY_CONTACTS } from "../data/dummyContacts";
 import { useCallSocket } from "../hooks/useCallSocket";
+import { useWebRtcMedia } from "../hooks/useWebRtcMedia";
 import { useCallStore } from "../store/callStore";
 import type { Contact } from "../types/contact";
 
@@ -32,7 +33,9 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
 
   const callsMap = useCallStore((s) => s.calls);
   const activeCallId = useCallStore((s) => s.activeCallId);
-  const ariConnected = useCallStore((s) => s.ariConnected);
+  const ariOperational = useCallStore((s) => s.ariOperational);
+  const ariWsConnected = useCallStore((s) => s.ariWsConnected);
+  const ariMode = useCallStore((s) => s.ariMode);
   const setActiveCall = useCallStore((s) => s.setActiveCall);
   const calls = useMemo(() => Object.values(callsMap), [callsMap]);
 
@@ -40,6 +43,17 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
     (activeCallId && callsMap[activeCallId]) ||
     calls.find((c) => c.status !== "ended" && c.status !== "failed") ||
     null;
+
+  const { webrtcStatus, webrtcError, remoteAudioRef } = useWebRtcMedia(activeCall);
+
+  const ariLabel =
+    ariOperational === null
+      ? "…"
+      : !ariOperational
+        ? "desconectado"
+        : ariMode === "websocket" || ariWsConnected
+          ? "conectado"
+          : "operativo (HTTP)";
 
   const selectedContact = useMemo(
     () => DUMMY_CONTACTS.find((c) => c.id === selectedContactId) ?? null,
@@ -71,6 +85,7 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
         overflow: "hidden",
       }}
     >
+      <audio ref={remoteAudioRef} autoPlay playsInline hidden />
       <Box
         component="header"
         sx={{
@@ -99,7 +114,7 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
               width: 18,
               height: 18,
               borderRadius: "50%",
-              bgcolor: ariConnected ? "success.main" : "error.main",
+              bgcolor: ariOperational ? "success.main" : "error.main",
             }}
           />
           <Typography
@@ -107,14 +122,14 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
             color="text.secondary"
             sx={{ display: { xs: "none", sm: "block" } }}
           >
-            ARI {ariConnected === null ? "…" : ariConnected ? "conectado" : "desconectado"}
+            ARI {ariLabel}
           </Typography>
           <IconButton
-          onClick={onToggleMode}
-          aria-label={mode === "dark" ? "Modo claro" : "Modo oscuro"}
-          color="inherit"
-          size="small"
-        >
+            onClick={onToggleMode}
+            aria-label={mode === "dark" ? "Modo claro" : "Modo oscuro"}
+            color="inherit"
+            size="small"
+          >
             {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
           </IconButton>
         </Box>
@@ -175,7 +190,11 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
             </Box>
           )}
           <Dialer number={phoneNumber} onNumberChange={setPhoneNumber} />
-          <CallStatus call={activeCall} ariConnected={ariConnected} />
+          <CallStatus
+            call={activeCall}
+            webrtcStatus={webrtcStatus}
+            webrtcError={webrtcError}
+          />
           <CallList
             calls={calls}
             activeCallId={activeCall?.call_id ?? null}

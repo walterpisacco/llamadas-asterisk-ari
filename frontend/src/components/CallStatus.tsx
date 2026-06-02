@@ -4,7 +4,6 @@ import { useTheme, type Theme } from "@mui/material/styles";
 import type { CallState, CallStatus as Status } from "../types/call";
 import AppCard from "./ui/Card";
 
-
 const STATUS_LABELS: Record<Status, string> = {
   ringing: "Ringing",
   answered: "Connected",
@@ -13,9 +12,20 @@ const STATUS_LABELS: Record<Status, string> = {
   failed: "Failed",
 };
 
+type WebRtcStatus = "idle" | "waiting_media" | "connecting" | "connected" | "error";
+
+const WEBRTC_LABELS: Record<WebRtcStatus, string> = {
+  idle: "Inactivo",
+  waiting_media: "Esperando enlace Asterisk…",
+  connecting: "Conectando micrófono…",
+  connected: "Audio en navegador",
+  error: "Error WebRTC",
+};
+
 interface Props {
   call: CallState | null;
-  ariConnected: boolean | null;
+  webrtcStatus?: WebRtcStatus;
+  webrtcError?: string | null;
 }
 
 function statusColor(status: Status, theme: Theme) {
@@ -29,7 +39,18 @@ function statusColor(status: Status, theme: Theme) {
   return map[status];
 }
 
-export default function CallStatus({ call, ariConnected }: Props) {
+function webrtcDotColor(status: WebRtcStatus, theme: Theme): string {
+  if (status === "connected") return theme.palette.success.main;
+  if (status === "error") return theme.palette.error.main;
+  if (status === "waiting_media") return theme.palette.warning.light;
+  return theme.palette.warning.main;
+}
+
+export default function CallStatus({
+  call,
+  webrtcStatus = "idle",
+  webrtcError,
+}: Props) {
   const theme = useTheme();
 
   return (
@@ -41,6 +62,28 @@ export default function CallStatus({ call, ariConnected }: Props) {
       >
         Estado
       </Typography>
+      {call && (
+        <Box sx={{ mb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                bgcolor: webrtcDotColor(webrtcStatus, theme),
+              }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {WEBRTC_LABELS[webrtcStatus]}
+            </Typography>
+          </Box>
+          {webrtcError && (
+            <Typography variant="caption" color="error">
+              {webrtcError}
+            </Typography>
+          )}
+        </Box>
+      )}
       {call ? (
         <Box component="dl" sx={{ m: 0, "& > div + div": { mt: 1.5 } }}>
           <Box>
@@ -50,8 +93,7 @@ export default function CallStatus({ call, ariConnected }: Props) {
             <Typography
               component="dd"
               variant="h5"
-              fontWeight={700}
-              sx={{ m: 0, color: statusColor(call.status, theme) }}
+              sx={{ m: 0, fontWeight: 700, color: statusColor(call.status, theme) }}
             >
               {STATUS_LABELS[call.status]}
             </Typography>

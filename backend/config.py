@@ -18,9 +18,25 @@ class Settings(BaseSettings):
     outbound_context: str = "SuperAdmin"
     outbound_extension: str = "1100"
     outbound_caller_id: str = "IA Bot <1000>"
+    # Segunda pata del puente (ej. PJSIP/1000). Alternativa: WebRTC + externalMedia.
+    agent_endpoint: str = ""
+    # WebRTC en el navegador ↔ Asterisk vía externalMedia (RTP/PCMU)
+    webrtc_enabled: bool = True
+    external_media_bind_host: str = "0.0.0.0"
+    # IP:puerto que Asterisk debe alcanzar (IP del backend si Asterisk es remoto)
+    external_media_advertise_host: str = "127.0.0.1"
+    external_media_format: str = "ulaw"
+    webrtc_stun_url: str = "stun:stun.l.google.com:19302"
     cors_origins: str = "http://localhost:5173"
     host: str = "0.0.0.0"
     port: int = 8000
+    # Recarga automática al guardar archivos (solo desarrollo; usar: python main.py)
+    dev_reload: bool = False
+    # Depuración ARI: logs detallados de eventos y canales
+    ari_debug: bool = False
+    ari_debug_full_events: bool = False
+    # Reproduce sound:hello-world al conectar saliente (prueba de ruta RTP)
+    ari_debug_play_sound: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

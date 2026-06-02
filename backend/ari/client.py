@@ -39,6 +39,33 @@ class AriClient:
         response = await client.request(method, path, json=json, params=params)
         return response
 
+    async def create_external_media(
+        self,
+        external_host: str,
+        *,
+        app_args: list[str] | None = None,
+        fmt: str = "ulaw",
+        encapsulation: str = "rtp",
+        connection_type: str = "client",
+        transport: str = "udp",
+    ) -> dict[str, Any]:
+        """Canal UnicastRTP: Asterisk envía RTP a external_host (nuestro puente WebRTC)."""
+        params: dict[str, Any] = {
+            "app": self.settings.stasis_app,
+            "external_host": external_host,
+            "format": fmt,
+            "encapsulation": encapsulation,
+            "connection_type": connection_type,
+            "transport": transport,
+            "direction": "both",
+        }
+        if app_args:
+            params["appArgs"] = ",".join(app_args)
+
+        response = await self._request("POST", "/ari/channels/externalMedia", params=params)
+        response.raise_for_status()
+        return response.json()
+
     async def originate_channel(
         self,
         endpoint: str,
@@ -92,6 +119,39 @@ class AriClient:
         response = await self._request("DELETE", f"/ari/bridges/{bridge_id}")
         if response.status_code not in (204, 404):
             response.raise_for_status()
+
+    async def get_channel(self, channel_id: str) -> dict[str, Any]:
+        response = await self._request("GET", f"/ari/channels/{channel_id}")
+        response.raise_for_status()
+        return response.json()
+
+    async def get_channel_variable(
+        self, channel_id: str, variable: str
+    ) -> str | None:
+        response = await self._request(
+            "GET",
+            f"/ari/channels/{channel_id}/variable",
+            params={"variable": variable},
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data = response.json()
+        return data.get("value")
+
+    async def play_sound(self, channel_id: str, media: str = "sound:hello-world") -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/ari/channels/{channel_id}/play",
+            params={"media": media},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_bridge(self, bridge_id: str) -> dict[str, Any]:
+        response = await self._request("GET", f"/ari/bridges/{bridge_id}")
+        response.raise_for_status()
+        return response.json()
 
     async def list_channels(self) -> list[dict[str, Any]]:
         response = await self._request("GET", "/ari/channels")

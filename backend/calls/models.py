@@ -16,6 +16,11 @@ class CallState(BaseModel):
     call_id: str = Field(default_factory=lambda: str(uuid4()))
     channel_ids: list[str] = Field(default_factory=list)
     bridge_id: str | None = None
+    outbound_stasis_setup: bool = False
+    agent_leg_originated: bool = False
+    external_media_attached: bool = False
+    external_media_channel_id: str | None = None
+    webrtc_connected: bool = False
     direction: CallDirection = "outbound"
     status: CallStatus = "ringing"
     number: str | None = None
