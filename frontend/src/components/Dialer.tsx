@@ -1,14 +1,17 @@
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { useState } from "react";
 import AppButton from "./ui/Button";
 import AppCard from "./ui/Card";
 import AppTextField from "./ui/TextField";
 import { useCallStore } from "../store/callStore";
 
-export default function Dialer() {
-  const [number, setNumber] = useState("");
+interface DialerProps {
+  number: string;
+  onNumberChange: (value: string) => void;
+}
+
+export default function Dialer({ number, onNumberChange }: DialerProps) {
   const { startCall, hangup, loading, activeCallId, error } = useCallStore();
 
   const hasActive = Boolean(activeCallId);
@@ -21,7 +24,7 @@ export default function Dialer() {
           label="Número"
           type="tel"
           value={number}
-          onChange={(e) => setNumber(e.target.value)}
+          onChange={(e) => onNumberChange(e.target.value)}
           placeholder="Ej: 9111565309188"
           disabled={hasActive || loading}
           slotProps={{ input: { sx: { fontSize: "1.125rem"}} }}
