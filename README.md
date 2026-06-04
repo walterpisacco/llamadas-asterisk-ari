@@ -12,7 +12,7 @@ Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
 
 ## Pantalla
 
-markdown[![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/pantalla.png)](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/pantalla.png)
+Vista Previa[![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/pantalla.png)]
 
 ## Arquitectura
 
