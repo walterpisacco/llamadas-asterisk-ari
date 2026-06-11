@@ -16,7 +16,7 @@ Vista Previa![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-a
 
 ## Configuración de Extensión
 
-Vista Previa![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/cedenciales.png)
+Vista Previa![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/credenciales.png)
 
 ## Arquitectura
 
