@@ -10,6 +10,7 @@ import AppButton from "../components/ui/Button";
 import AppCard from "../components/ui/Card";
 import HeaderActions from "../components/HeaderActions";
 import AppTextField from "../components/ui/TextField";
+import { useCallStore } from "../store/callStore";
 import { loadUserConfig, saveUserConfig } from "../storage/userConfig";
 
 interface ConfigurationProps {
@@ -20,23 +21,43 @@ interface ConfigurationProps {
 
 export default function Configuration({ mode, onToggleMode, onBack }: ConfigurationProps) {
   const theme = useTheme();
+  const connectAgent = useCallStore((s) => s.connectAgent);
+  const agentStatus = useCallStore((s) => s.agentStatus);
+  const agentError = useCallStore((s) => s.agentError);
 
   const [username, setUsername] = useState("");
   const [extension, setExtension] = useState("");
   const [password, setPassword] = useState("");
+  const [hasStoredPassword, setHasStoredPassword] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const config = loadUserConfig();
     if (!config) return;
     setUsername(config.username);
     setExtension(config.extension);
-    setPassword(config.password);
+    setHasStoredPassword(Boolean(config.password));
   }, []);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    saveUserConfig({ username, extension, password });
+    const stored = loadUserConfig();
+    const plainPassword = password.trim();
+    const passwordToPersist = plainPassword || stored?.password || "";
+
+    if (!passwordToPersist) return;
+
+    setSaving(true);
+    setSaved(false);
+    saveUserConfig(
+      { username, extension, password: passwordToPersist },
+      { passwordAlreadyHashed: !plainPassword },
+    );
+    setHasStoredPassword(true);
+    setPassword("");
+    await connectAgent();
+    setSaving(false);
     setSaved(true);
   };
 
@@ -95,12 +116,11 @@ export default function Configuration({ mode, onToggleMode, onBack }: Configurat
               Credenciales de Asterisk
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Estos datos se guardan en el navegador y se usarán para conectarte automáticamente
-              a tu extensión.
+              Estos datos se usarán para conectarte automáticamente.
             </Typography>
 
             <Box component="form" onSubmit={handleSubmit}>
-              <Stack spacing={3}>
+              <Stack spacing={3} mt={4}>
                 <AppTextField
                   label="Nombre de usuario"
                   value={username}
@@ -111,6 +131,7 @@ export default function Configuration({ mode, onToggleMode, onBack }: Configurat
                   autoComplete="username"
                   required
                   fullWidth
+                  
                 />
                 <AppTextField
                   label="Extensión de Asterisk"
@@ -132,18 +153,37 @@ export default function Configuration({ mode, onToggleMode, onBack }: Configurat
                     setSaved(false);
                   }}
                   autoComplete="current-password"
-                  required
+                  required={!hasStoredPassword}
+                  placeholder={hasStoredPassword ? "Contraseña guardada (MD5)" : undefined}
+                  helperText={
+                    hasStoredPassword
+                      ? ""
+                      : "Se guardará convertida a MD5 en este navegador."
+                  }
                   fullWidth
                 />
 
-                {saved && (
+                {saved && agentStatus === "connected" && (
                   <AppAlert severity="success">
-                    Configuración guardada correctamente en este navegador.
+                    Configuración guardada y extensión conectada al servidor.
                   </AppAlert>
                 )}
 
+                {saved && agentStatus !== "connected" && (
+                  <AppAlert severity="warning">
+                    Configuración guardada en el navegador, pero no se pudo conectar la
+                    extensión. Verificá que el backend y Asterisk estén activos.
+                  </AppAlert>
+                )}
+
+                {agentError && (
+                  <AppAlert severity="error">{agentError}</AppAlert>
+                )}
+
                 <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-                  <AppButton type="submit">Guardar</AppButton>
+                  <AppButton type="submit" disabled={saving}>
+                    {saving ? "Conectando…" : "Guardar"}
+                  </AppButton>
                 </Box>
               </Stack>
             </Box>

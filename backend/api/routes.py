@@ -19,6 +19,12 @@ class HangupRequest(BaseModel):
     call_id: str
 
 
+class AgentConnectRequest(BaseModel):
+    username: str
+    extension: str
+    password: str
+
+
 class WebRtcOfferRequest(BaseModel):
     sdp: str
     type: str
@@ -63,6 +69,23 @@ def create_api_router(call_service: CallService) -> APIRouter:
                 call = synced
         return call
 
+    @router.post("/agent/connect")
+    async def agent_connect(body: AgentConnectRequest) -> dict:
+        try:
+            return await call_service.register_agent(
+                body.username,
+                body.extension,
+                body.password,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @router.get("/agent/status")
+    async def agent_status() -> dict:
+        return call_service.get_agent_status()
+
     @router.get("/health")
     async def health() -> dict:
         ari_ok = await call_service.ari_healthy()
@@ -83,6 +106,7 @@ def create_api_router(call_service: CallService) -> APIRouter:
             "ari_reachable": ari_ok,
             "ari_last_error": listener.last_error,
             "webrtc_enabled": call_service.settings.webrtc_enabled,
+            "agent": call_service.get_agent_status(),
         }
 
     @router.get("/webrtc/config")

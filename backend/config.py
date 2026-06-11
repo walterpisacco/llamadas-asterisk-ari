@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     outbound_caller_id: str = "IA Bot <1000>"
     # Segunda pata del puente (ej. PJSIP/1000). Alternativa: WebRTC + externalMedia.
     agent_endpoint: str = ""
+    agent_endpoint_template: str = "PJSIP/{extension}"
     # WebRTC en el navegador ↔ Asterisk vía externalMedia (RTP/PCMU)
     webrtc_enabled: bool = True
     external_media_bind_host: str = "0.0.0.0"

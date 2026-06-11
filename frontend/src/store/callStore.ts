@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { CallState } from "../types/call";
-import { getCalls, postCall, postHangup } from "../services/api";
+import { getAgentStatus, getCalls, postAgentConnect, postCall, postHangup } from "../services/api";
+import { loadUserConfig } from "../storage/userConfig";
 
 interface CallStore {
   calls: Record<string, CallState>;
@@ -10,11 +11,16 @@ interface CallStore {
   ariOperational: boolean | null;
   ariWsConnected: boolean | null;
   ariMode: "websocket" | "http" | "offline" | null;
+  agentStatus: "idle" | "connecting" | "connected" | "unconfigured" | "error";
+  agentExtension: string | null;
+  agentUsername: string | null;
+  agentError: string | null;
   setAriHealth: (
     operational: boolean,
     wsConnected: boolean,
     mode: "websocket" | "http" | "offline",
   ) => void;
+  connectAgent: () => Promise<void>;
   upsertCall: (call: CallState) => void;
   setActiveCall: (callId: string | null) => void;
   fetchCalls: () => Promise<void>;
@@ -30,6 +36,59 @@ export const useCallStore = create<CallStore>((set, get) => ({
   ariOperational: null,
   ariWsConnected: null,
   ariMode: null,
+  agentStatus: "idle",
+  agentExtension: null,
+  agentUsername: null,
+  agentError: null,
+
+  connectAgent: async () => {
+    const config = loadUserConfig();
+    if (!config?.username || !config.extension || !config.password) {
+      set({
+        agentStatus: "unconfigured",
+        agentExtension: null,
+        agentUsername: null,
+        agentError: null,
+      });
+      return;
+    }
+
+    set({
+      agentStatus: "connecting",
+      agentError: null,
+      agentUsername: config.username,
+      agentExtension: config.extension,
+    });
+
+    try {
+      const result = await postAgentConnect(config);
+      set({
+        agentStatus: "connected",
+        agentUsername: result.agent?.username ?? config.username,
+        agentExtension: result.agent?.extension ?? config.extension,
+        agentError: null,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Error al conectar agente";
+      set({
+        agentStatus: "error",
+        agentError: message,
+      });
+      try {
+        const status = await getAgentStatus();
+        if (status.connected && status.agent) {
+          set({
+            agentStatus: "connected",
+            agentUsername: status.agent.username,
+            agentExtension: status.agent.extension,
+            agentError: null,
+          });
+        }
+      } catch {
+        /* sin estado remoto */
+      }
+    }
+  },
 
   setAriHealth: (operational, wsConnected, mode) =>
     set({

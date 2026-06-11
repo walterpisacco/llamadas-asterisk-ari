@@ -15,6 +15,16 @@ export function useCallSocket() {
       const ws = Boolean(h.ari_ws_connected);
       const mode = h.ari_mode ?? (operational ? (ws ? "websocket" : "http") : "offline");
       setAriHealth(operational, ws, mode);
+
+      const agent = h.agent;
+      if (agent?.connected && agent.agent) {
+        useCallStore.setState({
+          agentStatus: "connected",
+          agentUsername: agent.agent.username,
+          agentExtension: agent.agent.extension,
+          agentError: null,
+        });
+      }
     };
 
     getHealth().then(applyHealth).catch(() => setAriHealth(false, false, "offline"));

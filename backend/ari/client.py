@@ -176,6 +176,13 @@ class AriClient:
             except Exception as exc:
                 logger.warning("Failed to delete bridge %s: %s", bridge.get("id"), exc)
 
+    async def get_endpoint(self, tech: str, resource: str) -> dict[str, Any] | None:
+        response = await self._request("GET", f"/ari/endpoints/{tech}/{resource}")
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+
     async def health_check(self) -> bool:
         try:
             client = await self._get_client()

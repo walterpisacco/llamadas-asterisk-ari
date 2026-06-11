@@ -11,6 +11,7 @@ from calls.registry import CallRegistry
 from calls.state_machine import CallStateMachine, PROCESSED_CHANNELS
 from config import Settings, get_settings
 from media.manager import MediaManager
+from services.agent_session import AgentSessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,10 @@ class CallService:
             self.settings,
             media_manager=self.media_manager,
             call_resolver=self.resolve_call_for_event,
+            get_agent_endpoint=self.get_agent_endpoint,
         )
         self._broadcast = broadcast
+        self.agent_session = AgentSessionStore()
         self.ari_listener = AriEventsListener(self._handle_ari_event, self.settings)
         self._pending_outbound: dict[str, str] = {}
         self._outbound_calls: dict[str, CallState] = {}
@@ -151,6 +154,72 @@ class CallService:
         await self._cleanup_after_remote_end(call)
         await self._notify(call)
 
+    def get_agent_endpoint(self) -> str | None:
+        if self.settings.agent_endpoint:
+            return self.settings.agent_endpoint
+        agent = self.agent_session.current
+        if not agent:
+            return None
+        return self.settings.agent_endpoint_template.format(extension=agent.extension)
+
+    def get_outbound_caller_id(self) -> str:
+        agent = self.agent_session.current
+        if agent:
+            return f"{agent.username} <{agent.extension}>"
+        return self.settings.outbound_caller_id
+
+    async def register_agent(
+        self, username: str, extension: str, password: str
+    ) -> dict:
+        username = username.strip()
+        extension = extension.strip()
+        if not username or not extension or not password:
+            raise ValueError("username, extension y password son obligatorios")
+
+        ari_ok = await self.ari_healthy()
+        if not ari_ok:
+            raise RuntimeError("ARI no disponible")
+
+        endpoint = self.settings.agent_endpoint_template.format(extension=extension)
+        endpoint_verified = False
+        if endpoint.startswith("PJSIP/"):
+            resource = endpoint.split("/", 1)[1]
+            try:
+                info = await self.ari.get_endpoint("PJSIP", resource)
+                endpoint_verified = info is not None
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo verificar endpoint %s: %s",
+                    endpoint,
+                    exc,
+                )
+
+        agent = self.agent_session.register(username, extension, password)
+        logger.info(
+            "Agente registrado ext=%s user=%s endpoint=%s verified=%s",
+            extension,
+            username,
+            endpoint,
+            endpoint_verified,
+        )
+        return {
+            "connected": True,
+            "agent": agent.to_public(),
+            "endpoint": endpoint,
+            "endpoint_verified": endpoint_verified,
+            "webrtc_enabled": self.settings.webrtc_enabled,
+        }
+
+    def get_agent_status(self) -> dict:
+        agent = self.agent_session.current
+        endpoint = self.get_agent_endpoint()
+        return {
+            "connected": agent is not None,
+            "agent": agent.to_public() if agent else None,
+            "endpoint": endpoint,
+            "webrtc_enabled": self.settings.webrtc_enabled,
+        }
+
     async def start_outbound(self, number: str) -> CallState:
         endpoint = self.settings.format_endpoint(number)
         call = CallState(
@@ -170,7 +239,7 @@ class CallService:
         try:
             channel = await self.ari.originate_channel(
                 endpoint,
-                caller_id=self.settings.outbound_caller_id,
+                caller_id=self.get_outbound_caller_id(),
                 use_stasis=True,
                 app_args=[call.call_id, "customer"],
             )

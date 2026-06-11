@@ -11,6 +11,8 @@ interface HeaderActionsProps {
   onToggleMode: () => void;
   ariOperational?: boolean | null;
   ariLabel?: string;
+  agentStatus?: "idle" | "connecting" | "connected" | "unconfigured" | "error" | null;
+  agentLabel?: string;
   showConfiguration?: boolean;
   onOpenConfiguration?: () => void;
   sx?: SxProps<Theme>;
@@ -21,6 +23,8 @@ export default function HeaderActions({
   onToggleMode,
   ariOperational = null,
   ariLabel = "…",
+  agentStatus,
+  agentLabel,
   showConfiguration = true,
   onOpenConfiguration,
   sx,
@@ -37,6 +41,43 @@ export default function HeaderActions({
         ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
       ]}
     >
+      {agentStatus != null && agentStatus !== "idle" && (
+        <>
+          <Box
+            component="span"
+            title={agentLabel ?? `Extensión ${agentStatus}`}
+            sx={{
+              width: { xs: 14, sm: 18 },
+              height: { xs: 14, sm: 18 },
+              borderRadius: "50%",
+              flexShrink: 0,
+              bgcolor:
+                agentStatus === "connected"
+                  ? "success.main"
+                  : agentStatus === "connecting"
+                    ? "warning.main"
+                    : agentStatus === "unconfigured"
+                      ? "text.disabled"
+                      : "error.main",
+            }}
+          />
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            noWrap
+            sx={{ display: { xs: "none", lg: "block" }, maxWidth: { lg: 160 } }}
+          >
+            {agentLabel ??
+              (agentStatus === "connecting"
+                ? "Conectando…"
+                : agentStatus === "unconfigured"
+                  ? "Sin configurar"
+                  : agentStatus === "error"
+                    ? "Error extensión"
+                    : "Extensión")}
+          </Typography>
+        </>
+      )}
       {ariOperational !== null && (
         <>
           <Box

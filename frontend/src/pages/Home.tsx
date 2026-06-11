@@ -11,7 +11,6 @@ import CallStatus from "../components/CallStatus";
 import CallList from "../components/CallList";
 import ContactsPanel from "../components/ContactsPanel";
 import { DUMMY_CONTACTS } from "../data/dummyContacts";
-import { useCallSocket } from "../hooks/useCallSocket";
 import { useWebRtcMedia } from "../hooks/useWebRtcMedia";
 import { useCallStore } from "../store/callStore";
 import type { Contact } from "../types/contact";
@@ -23,7 +22,6 @@ interface HomeProps {
 }
 
 export default function Home({ mode, onToggleMode, onOpenConfiguration }: HomeProps) {
-  useCallSocket();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
@@ -36,6 +34,9 @@ export default function Home({ mode, onToggleMode, onOpenConfiguration }: HomePr
   const ariOperational = useCallStore((s) => s.ariOperational);
   const ariWsConnected = useCallStore((s) => s.ariWsConnected);
   const ariMode = useCallStore((s) => s.ariMode);
+  const agentStatus = useCallStore((s) => s.agentStatus);
+  const agentExtension = useCallStore((s) => s.agentExtension);
+  const agentUsername = useCallStore((s) => s.agentUsername);
   const setActiveCall = useCallStore((s) => s.setActiveCall);
   const calls = useMemo(() => Object.values(callsMap), [callsMap]);
 
@@ -54,6 +55,17 @@ export default function Home({ mode, onToggleMode, onOpenConfiguration }: HomePr
         : ariMode === "websocket" || ariWsConnected
           ? "conectado"
           : "operativo (HTTP)";
+
+  const agentLabel =
+    agentStatus === "connected" && agentExtension
+      ? `Ext ${agentExtension}${agentUsername ? ` (${agentUsername})` : ""}`
+      : agentStatus === "connecting"
+        ? "Conectando extensión…"
+        : agentStatus === "unconfigured"
+          ? "Configurá tu extensión"
+          : agentStatus === "error"
+            ? "Error de extensión"
+            : undefined;
 
   const selectedContact = useMemo(
     () => DUMMY_CONTACTS.find((c) => c.id === selectedContactId) ?? null,
@@ -140,6 +152,8 @@ export default function Home({ mode, onToggleMode, onOpenConfiguration }: HomePr
             onOpenConfiguration={onOpenConfiguration}
             ariOperational={ariOperational}
             ariLabel={ariLabel}
+            agentStatus={agentStatus}
+            agentLabel={agentLabel}
             sx={{ display: { xs: "flex", md: "none" } }}
           />
         </Box>
@@ -168,6 +182,8 @@ export default function Home({ mode, onToggleMode, onOpenConfiguration }: HomePr
           onOpenConfiguration={onOpenConfiguration}
           ariOperational={ariOperational}
           ariLabel={ariLabel}
+          agentStatus={agentStatus}
+          agentLabel={agentLabel}
           sx={{ display: { xs: "none", md: "flex" }, flexShrink: 0 }}
         />
       </Box>

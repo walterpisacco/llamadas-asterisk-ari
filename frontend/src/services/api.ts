@@ -43,6 +43,36 @@ export async function getCall(callId: string): Promise<CallState> {
   return request(`/calls/${callId}`);
 }
 
+export interface AgentStatus {
+  connected: boolean;
+  agent: {
+    username: string;
+    extension: string;
+    connected_at: string;
+  } | null;
+  endpoint: string | null;
+  webrtc_enabled: boolean;
+}
+
+export interface AgentConnectResult extends AgentStatus {
+  endpoint_verified?: boolean;
+}
+
+export async function postAgentConnect(body: {
+  username: string;
+  extension: string;
+  password: string;
+}): Promise<AgentConnectResult> {
+  return request("/agent/connect", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getAgentStatus(): Promise<AgentStatus> {
+  return request("/agent/status");
+}
+
 export async function getHealth(): Promise<{
   status: string;
   ari_connected: boolean;
@@ -52,6 +82,7 @@ export async function getHealth(): Promise<{
   ari_events_recent?: boolean;
   ari_reachable: boolean;
   webrtc_enabled?: boolean;
+  agent?: AgentStatus;
 }> {
   return request("/health");
 }

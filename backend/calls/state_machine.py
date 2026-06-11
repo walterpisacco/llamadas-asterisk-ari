@@ -24,12 +24,14 @@ class CallStateMachine:
         settings: Settings | None = None,
         media_manager: MediaManager | None = None,
         call_resolver: CallResolver | None = None,
+        get_agent_endpoint: Callable[[], str | None] | None = None,
     ) -> None:
         self.ari = ari
         self.registry = registry
         self.settings = settings or get_settings()
         self.media_manager = media_manager
         self._call_resolver = call_resolver
+        self._get_agent_endpoint = get_agent_endpoint
 
     async def handle_event(self, event: dict[str, Any]) -> CallState | None:
         event_type = event.get("type")
@@ -198,13 +200,21 @@ class CallStateMachine:
             len(call.channel_ids),
         )
 
+    def _resolve_agent_endpoint(self) -> str | None:
+        if self._get_agent_endpoint:
+            endpoint = self._get_agent_endpoint()
+            if endpoint:
+                return endpoint
+        return self.settings.agent_endpoint or None
+
     async def _originate_agent_leg(self, call: CallState) -> None:
-        if not self.settings.agent_endpoint or call.agent_leg_originated:
+        agent_endpoint = self._resolve_agent_endpoint()
+        if not agent_endpoint or call.agent_leg_originated:
             return
         call.agent_leg_originated = True
         try:
             channel = await self.ari.originate_channel(
-                self.settings.agent_endpoint,
+                agent_endpoint,
                 caller_id=self.settings.outbound_caller_id,
                 use_stasis=True,
                 app_args=[call.call_id, "agent"],
@@ -213,7 +223,7 @@ class CallStateMachine:
             logger.info(
                 "Pata agente originada: %s → %s (llamada %s)",
                 channel["id"],
-                self.settings.agent_endpoint,
+                agent_endpoint,
                 call.call_id,
             )
         except Exception as exc:
@@ -322,7 +332,7 @@ class CallStateMachine:
 
         if (
             not self.settings.webrtc_enabled
-            and not self.settings.agent_endpoint
+            and not self._resolve_agent_endpoint()
         ):
             logger.warning(
                 "Llamada %s: solo hay 1 canal en el puente (%s). "
