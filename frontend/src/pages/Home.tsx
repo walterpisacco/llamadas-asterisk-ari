@@ -1,13 +1,11 @@
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import Brightness4Icon from "@mui/icons-material/Brightness4";
-import Brightness7Icon from "@mui/icons-material/Brightness7";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { alpha, useTheme } from "@mui/material/styles";
 import { useEffect, useMemo, useState } from "react";
+import HeaderActions from "../components/HeaderActions";
 import Dialer from "../components/Dialer";
 import CallStatus from "../components/CallStatus";
 import CallList from "../components/CallList";
@@ -21,68 +19,10 @@ import type { Contact } from "../types/contact";
 interface HomeProps {
   mode: "light" | "dark";
   onToggleMode: () => void;
+  onOpenConfiguration: () => void;
 }
 
-interface HeaderActionsProps {
-  mode: "light" | "dark";
-  onToggleMode: () => void;
-  ariOperational: boolean | null;
-  ariLabel: string;
-  sx?: SxProps<Theme>;
-}
-
-function HeaderActions({
-  mode,
-  onToggleMode,
-  ariOperational,
-  ariLabel,
-  sx,
-}: HeaderActionsProps) {
-  return (
-    <Box
-      sx={[
-        {
-          display: "flex",
-          alignItems: "center",
-          gap: { xs: 0.75, sm: 1.5 },
-          flexShrink: 0,
-        },
-        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
-      ]}
-    >
-      <Box
-        component="span"
-        title={`ARI ${ariLabel}`}
-        sx={{
-          width: { xs: 14, sm: 18 },
-          height: { xs: 14, sm: 18 },
-          borderRadius: "50%",
-          flexShrink: 0,
-          bgcolor: ariOperational ? "success.main" : "error.main",
-        }}
-      />
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        noWrap
-        sx={{ display: { xs: "none", sm: "block" }, maxWidth: { sm: 140, md: "none" } }}
-      >
-        ARI {ariLabel}
-      </Typography>
-      <IconButton
-        onClick={onToggleMode}
-        aria-label={mode === "dark" ? "Modo claro" : "Modo oscuro"}
-        color="inherit"
-        size="small"
-        sx={{ ml: { xs: -0.5, sm: 0 } }}
-      >
-        {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
-      </IconButton>
-    </Box>
-  );
-}
-
-export default function Home({ mode, onToggleMode }: HomeProps) {
+export default function Home({ mode, onToggleMode, onOpenConfiguration }: HomeProps) {
   useCallSocket();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -197,6 +137,7 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
           <HeaderActions
             mode={mode}
             onToggleMode={onToggleMode}
+            onOpenConfiguration={onOpenConfiguration}
             ariOperational={ariOperational}
             ariLabel={ariLabel}
             sx={{ display: { xs: "flex", md: "none" } }}
@@ -224,6 +165,7 @@ export default function Home({ mode, onToggleMode }: HomeProps) {
         <HeaderActions
           mode={mode}
           onToggleMode={onToggleMode}
+          onOpenConfiguration={onOpenConfiguration}
           ariOperational={ariOperational}
           ariLabel={ariLabel}
           sx={{ display: { xs: "none", md: "flex" }, flexShrink: 0 }}
