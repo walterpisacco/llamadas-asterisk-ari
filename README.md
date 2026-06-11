@@ -14,6 +14,10 @@ Si este proyecto puede ayudarte, considera colaborar en su desarrollo.
 
 Vista Previa![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/pantalla.png)
 
+## Configuración de Extensión
+
+Vista Previa![Vista Previa](https://github.com/walterpisacco/llamadas-asterisk-ari/blob/main/cedenciales.png)
+
 ## Arquitectura
 
 ```
